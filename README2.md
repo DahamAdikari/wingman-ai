@@ -33,4 +33,13 @@ URL - http://localhost:5001/create
 Body Type - JSON (raw)
 Body - { "text": "My first content" }
 
+# Step 5 - Test review-service
+go to services/review-service
+run
+```bash
+npm install
+node index.js
+```
+Do step 4 again
+
 
