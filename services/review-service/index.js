@@ -4,7 +4,9 @@ async function start(){
     const conn = await amqp.connect('amqp://localhost');
     const ch = await conn.createChannel();
 
+    //Declare the queues
     await ch.assertQueue('CONTENT_CREATED');
+    await ch.assertQueue('MANAGER_APPROVED');
 
     console.log('Waiting for events...');
 
@@ -15,6 +17,9 @@ async function start(){
 
         //simulate approval
         console.log("Manager Approved:", data.id);
+
+        //Send next event
+        ch.sendToQueue('MANAGER_APPROVED', Buffer.from(JSON.stringify(data)));
     });
 }
 
