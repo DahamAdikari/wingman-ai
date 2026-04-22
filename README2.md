@@ -34,7 +34,12 @@ or POSTMAN
 Method - POST
 URL - http://localhost:5001/create
 Body Type - JSON (raw)
-Body - { "text": "My first content" }
+Body -
+
+{
+  "prompt": "Promote a pizza shop",
+  "scheduled_time": "2026-04-22T19:37:00+05:30"
+}
 
 # Step 5 - Test review-service
 go to services/review-service
