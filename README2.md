@@ -1,8 +1,11 @@
 ## Step 1 - Install Docker
 Install docker. Then run
 ```bash
-docker-compose up
+docker-compose up -d
+
 ```
+
+(or docker-compose up)
 
 ## Step 2 - Check RabbitMQ UI 
 password and username: guest

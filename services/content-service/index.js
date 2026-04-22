@@ -16,7 +16,7 @@ res.send('Content Service Running');
 app.post('/create', async (req, res)=>{
     
 
-    const {prompt} = req.body;
+    const {prompt, scheduled_time} = req.body;
 
     //validation
     if(!prompt){
@@ -36,6 +36,7 @@ app.post('/create', async (req, res)=>{
             prompt,
             post: aiData.post,
             caption: aiData.caption,
+            scheduled_time,
             status: 'CREATED'
         };
 
