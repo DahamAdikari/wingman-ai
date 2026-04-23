@@ -11,6 +11,8 @@
   "type": "commonjs",
   "description": "",
   "dependencies": {
-    "amqplib": "^1.0.3"
+    "amqplib": "^1.0.3",
+    "bullmq": "^5.76.0",
+    "ioredis": "^5.10.1"
   }
 }

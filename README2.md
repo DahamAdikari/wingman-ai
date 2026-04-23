@@ -1,8 +1,11 @@
 ## Step 1 - Install Docker
 Install docker. Then run
 ```bash
-docker-compose up
+docker-compose up -d
+
 ```
+
+(or docker-compose up)
 
 ## Step 2 - Check RabbitMQ UI 
 password and username: guest
@@ -31,7 +34,12 @@ or POSTMAN
 Method - POST
 URL - http://localhost:5001/create
 Body Type - JSON (raw)
-Body - { "text": "My first content" }
+Body -
+
+{
+  "prompt": "Promote a pizza shop",
+  "scheduled_time": "2026-04-22T19:37:00+05:30"
+}
 
 # Step 5 - Test review-service
 go to services/review-service
@@ -41,5 +49,9 @@ npm install
 node index.js
 ```
 Do step 4 again
+
+
+## Extra: Run docker postgres
+docker exec -it <container_name> psql -U postgres
 
 
