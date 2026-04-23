@@ -3,6 +3,8 @@ require('dotenv').config();
 const express = require('express');
 const { sendEvent } = require('./rabbit');
 const {generateContent} = require('./gemini');
+const pool = require('./db');
+
 
 //create express
 const app = express();
@@ -39,6 +41,25 @@ app.post('/create', async (req, res)=>{
             scheduled_time,
             status: 'CREATED'
         };
+
+        //Save to DB - content_db, table: contents
+
+        await pool.query(
+            `INSERT INTO contents
+            (id, prompt, post, caption, scheduled_time, status)
+            VALUES ($1, $2, $3, $4, $5, $6)`,
+            [
+                content.id,
+                content.prompt,
+                content.post,
+                content.caption,
+                content.scheduled_time,
+                content.status
+            ]
+        );
+
+        console.log("Saved to DB:", content.id);
+
 
         //Send Event
         await sendEvent('CONTENT_CREATED', content);

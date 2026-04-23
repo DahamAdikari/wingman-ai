@@ -51,3 +51,7 @@ node index.js
 Do step 4 again
 
 
+## Extra: Run docker postgres
+docker exec -it <container_name> psql -U postgres
+
+
