@@ -17,6 +17,7 @@ services:
     ports:
       - "5433:5432"
     volumes:
+  content-db-data:
       - user-db-data:/var/lib/postgresql/data
       - ./docker/init/user-db.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
@@ -55,5 +56,38 @@ services:
     depends_on:
       - user-service
 
+  # ────────────────────────────────────────────────────────────────────────────
+  content-db:
+    image: postgres:15
+    container_name: wingman-content-db
+    restart: always
+    environment:
+      POSTGRES_DB: content_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5434:5432"
+    volumes:
+      - content-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d content_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  content-service:
+    build: ./services/content-service
+    container_name: wingman-content-service
+    ports:
+      - "5002:5002"
+    environment:
+      PORT: 5002
+      DATABASE_URL: postgres://postgres:postgres@content-db:5432/content_db
+      JWT_SECRET: devsecret
+    depends_on:
+      content-db:
+        condition: service_healthy
+
 volumes:
+  content-db-data:
   user-db-data:

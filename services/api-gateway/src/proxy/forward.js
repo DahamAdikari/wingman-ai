@@ -7,7 +7,7 @@ const axios = require('axios');
  */
 async function forward(req, res, targetUrl) {
   try {
-    const { host, ...restHeaders } = req.headers;
+    const { host, 'content-length': _cl, 'transfer-encoding': _te, ...restHeaders } = req.headers;
 
     const headers = {
       ...restHeaders,
