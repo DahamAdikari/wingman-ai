@@ -8,6 +8,21 @@ const CONTENT_SERVICE = process.env.CONTENT_SERVICE_URL;
 const REVIEW_SERVICE = process.env.REVIEW_SERVICE_URL;
 const USER_SERVICE = process.env.USER_SERVICE_URL;
 
+// POST /api/projects → create a new project
+router.post('/', (req, res) => {
+  forward(req, res, `${USER_SERVICE}/projects`);
+});
+
+// PATCH /api/projects/:id → update project name / description / status
+router.patch('/:id', (req, res) => {
+  forward(req, res, `${USER_SERVICE}/projects/${req.params.id}`);
+});
+
+// POST /api/projects/:id/members → enrol a user into a project
+router.post('/:id/members', (req, res) => {
+  forward(req, res, `${USER_SERVICE}/projects/${req.params.id}/members`);
+});
+
 // GET /api/projects → dashboard list (fast read from query_db)
 router.get('/', (req, res) => {
   forward(req, res, `${QUERY_SERVICE}/query/projects`);

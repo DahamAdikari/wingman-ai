@@ -1,0 +1,871 @@
+{
+  "info": {
+    "name": "Wingman AI API",
+    "_postman_id": "wingman-ai-v1",
+    "description": "Complete API collection for the Wingman AI marketing SaaS platform.\n\nAll protected routes require a Bearer token — run **Register Manager** or **Login** first and the token is saved automatically to the `token` collection variable.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+
+  "variable": [
+    { "key": "base_url",      "value": "http://localhost:4000",  "type": "string" },
+    { "key": "token",         "value": "",                        "type": "string" },
+    { "key": "manager_id",    "value": "",                        "type": "string" },
+    { "key": "project_id",    "value": "",                        "type": "string" },
+    { "key": "user_id",       "value": "",                        "type": "string" },
+    { "key": "post_id",       "value": "",                        "type": "string" },
+    { "key": "asset_id",      "value": "",                        "type": "string" },
+    { "key": "notif_id",      "value": "",                        "type": "string" }
+  ],
+
+  "item": [
+
+    {
+      "name": "Auth",
+      "description": "Public routes — no token needed. Login / Register auto-save the token.",
+      "item": [
+
+        {
+          "name": "Register Manager",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.token) {",
+                  "    pm.collectionVariables.set('token', res.token);",
+                  "    pm.collectionVariables.set('manager_id', res.manager.id);",
+                  "    console.log('Token saved:', res.token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"John Manager\",\n  \"email\": \"manager@wingman.com\",\n  \"password\": \"password123\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/register",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "register"]
+            },
+            "description": "Register a new manager account. Returns a JWT token and manager object. Token is auto-saved to the `token` collection variable."
+          }
+        },
+
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.token) {",
+                  "    pm.collectionVariables.set('token', res.token);",
+                  "    pm.collectionVariables.set('manager_id', res.manager.id);",
+                  "    console.log('Token saved:', res.token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"manager@wingman.com\",\n  \"password\": \"password123\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "login"]
+            },
+            "description": "Authenticate a manager and receive a JWT token. Token is auto-saved to the `token` collection variable."
+          }
+        }
+
+      ]
+    },
+
+    {
+      "name": "Projects",
+      "description": "Project management — create, list, update projects and manage members.",
+      "item": [
+
+        {
+          "name": "Create Project",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.id) {",
+                  "    pm.collectionVariables.set('project_id', res.id);",
+                  "    console.log('project_id saved:', res.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Nike\",\n  \"description\": \"Nike social media campaign — Q3 2026\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/projects",
+              "host": ["{{base_url}}"],
+              "path": ["api", "projects"]
+            },
+            "description": "Create a new client project. `project_id` is auto-saved."
+          }
+        },
+
+        {
+          "name": "List Projects (Dashboard)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/projects",
+              "host": ["{{base_url}}"],
+              "path": ["api", "projects"]
+            },
+            "description": "Returns the denormalised dashboard view from query-service. Fast single-query read — no joins."
+          }
+        },
+
+        {
+          "name": "Get Project Detail (Fan-out)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/projects/{{project_id}}/detail",
+              "host": ["{{base_url}}"],
+              "path": ["api", "projects", "{{project_id}}", "detail"]
+            },
+            "description": "API Composition — gateway fans out in parallel to content-service, review-service, and user-service, then assembles a single response with `content`, `reviews`, and `members`."
+          }
+        },
+
+        {
+          "name": "Get Project Posts",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/projects/{{project_id}}/posts",
+              "host": ["{{base_url}}"],
+              "path": ["api", "projects", "{{project_id}}", "posts"]
+            },
+            "description": "List all posts for a project from content-service."
+          }
+        },
+
+        {
+          "name": "Update Project",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Nike (Updated)\",\n  \"description\": \"Updated campaign description\",\n  \"status\": \"active\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/projects/{{project_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "projects", "{{project_id}}"]
+            },
+            "description": "Update project name, description, or status (`active` | `archived`). All fields are optional — only provided fields are changed."
+          }
+        },
+
+        {
+          "name": "Archive Project",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"archived\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/projects/{{project_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "projects", "{{project_id}}"]
+            },
+            "description": "Archive a project by setting status to `archived`."
+          }
+        },
+
+        {
+          "name": "Add Member to Project",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": \"{{user_id}}\",\n  \"role\": \"client\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/projects/{{project_id}}/members",
+              "host": ["{{base_url}}"],
+              "path": ["api", "projects", "{{project_id}}", "members"]
+            },
+            "description": "Enrol a user into a project with a role. Role must be one of: `client` | `reviewer` | `viewer`."
+          }
+        }
+
+      ]
+    },
+
+    {
+      "name": "Users",
+      "description": "User management — create and list client/team members under the authenticated manager.",
+      "item": [
+
+        {
+          "name": "Create User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.id) {",
+                  "    pm.collectionVariables.set('user_id', res.id);",
+                  "    console.log('user_id saved:', res.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Jane Client\",\n  \"email\": \"jane@nike.com\",\n  \"role\": \"client\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/users",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users"]
+            },
+            "description": "Create a user under the authenticated manager. Role must be one of: `client` | `team_member` | `viewer`. `user_id` is auto-saved."
+          }
+        },
+
+        {
+          "name": "Create Team Member",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Alex Designer\",\n  \"email\": \"alex@agency.com\",\n  \"role\": \"team_member\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/users",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users"]
+            },
+            "description": "Create an internal team member."
+          }
+        },
+
+        {
+          "name": "List Users",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/users",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users"]
+            },
+            "description": "List all users created under the authenticated manager."
+          }
+        },
+
+        {
+          "name": "Get User by ID",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/users/{{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "{{user_id}}"]
+            },
+            "description": "Fetch a single user by ID. Returns 404 if the user does not belong to the authenticated manager."
+          }
+        }
+
+      ]
+    },
+
+    {
+      "name": "Content",
+      "description": "Post creation and AI content generation.",
+      "item": [
+
+        {
+          "name": "Create Post (Trigger AI Generation)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.id) {",
+                  "    pm.collectionVariables.set('post_id', res.id);",
+                  "    console.log('post_id saved:', res.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"project_id\": \"{{project_id}}\",\n  \"platform\": \"instagram\",\n  \"image_prompt\": \"A vibrant Nike running shoe on a city street at sunrise, energetic mood, photorealistic\",\n  \"caption_brief\": \"Launch campaign for Air Max 2026 — motivational tone, include #JustDoIt\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/content",
+              "host": ["{{base_url}}"],
+              "path": ["api", "content"]
+            },
+            "description": "Create a new post and trigger AI image + caption generation. Platform must be one of: `instagram` | `linkedin` | `twitter`. `post_id` is auto-saved."
+          }
+        },
+
+        {
+          "name": "Create Post for LinkedIn",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"project_id\": \"{{project_id}}\",\n  \"platform\": \"linkedin\",\n  \"image_prompt\": \"Professional Nike brand imagery, corporate setting, clean white background\",\n  \"caption_brief\": \"B2B partnership announcement — formal tone, 200 words max\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/content",
+              "host": ["{{base_url}}"],
+              "path": ["api", "content"]
+            },
+            "description": "Create a LinkedIn post."
+          }
+        },
+
+        {
+          "name": "Get Post by ID",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/content/{{post_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "content", "{{post_id}}"]
+            },
+            "description": "Fetch a single post with its latest version (caption, image URL, version number)."
+          }
+        }
+
+      ]
+    },
+
+    {
+      "name": "Reviews",
+      "description": "Approval loop — manager and client review decisions.\n\nFlow: manager_review → (manager approves) → client_review → (client approves) → approved\nRejection at any stage sends back to content-service for AI regeneration.",
+      "item": [
+
+        {
+          "name": "Manager — Approve",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reviewer_role\": \"manager\",\n  \"decision\": \"approved\",\n  \"feedback_text\": \"Looks great, sending to client.\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/review/{{post_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "review", "{{post_id}}"]
+            },
+            "description": "Manager approves content. Emits `MANAGER_APPROVED` — post moves to `client_review` stage."
+          }
+        },
+
+        {
+          "name": "Manager — Reject",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reviewer_role\": \"manager\",\n  \"decision\": \"rejected\",\n  \"feedback_text\": \"The image doesn't match the brand guidelines. Please use darker tones and remove the text overlay.\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/review/{{post_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "review", "{{post_id}}"]
+            },
+            "description": "Manager hard-rejects content. Emits `CONTENT_REJECTED` — content-service regenerates with the feedback attached."
+          }
+        },
+
+        {
+          "name": "Manager — Request Changes",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reviewer_role\": \"manager\",\n  \"decision\": \"changes_requested\",\n  \"feedback_text\": \"Caption is too long. Shorten to under 100 words and make the tone more casual.\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/review/{{post_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "review", "{{post_id}}"]
+            },
+            "description": "Manager requests changes. Emits `CONTENT_REJECTED` with feedback — content-service regenerates."
+          }
+        },
+
+        {
+          "name": "Client — Approve",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reviewer_role\": \"client\",\n  \"decision\": \"approved\",\n  \"feedback_text\": \"Perfect! This represents our brand well.\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/review/{{post_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "review", "{{post_id}}"]
+            },
+            "description": "Client approves content. Emits `CONTENT_APPROVED` — post moves to `approved` and becomes ready for scheduling."
+          }
+        },
+
+        {
+          "name": "Client — Request Changes",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reviewer_role\": \"client\",\n  \"decision\": \"changes_requested\",\n  \"feedback_text\": \"Please make the tone more formal and add our product tagline: 'Built to Last'.\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/review/{{post_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "review", "{{post_id}}"]
+            },
+            "description": "Client requests changes. Emits `CLIENT_FEEDBACK` — content-service regenerates with the new feedback."
+          }
+        },
+
+        {
+          "name": "Get Review State",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/review/{{post_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "review", "{{post_id}}"]
+            },
+            "description": "Get the current approval state for a post — current stage, manager_approved, client_approved flags, and full review history."
+          }
+        }
+
+      ]
+    },
+
+    {
+      "name": "Assets",
+      "description": "Brand assets — logos, templates, prompts. All scoped to the authenticated manager.",
+      "item": [
+
+        {
+          "name": "Upload Logo (URL reference)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.id) {",
+                  "    pm.collectionVariables.set('asset_id', res.id);",
+                  "    console.log('asset_id saved:', res.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"project_id\": \"{{project_id}}\",\n  \"type\": \"logo\",\n  \"name\": \"Nike Primary Logo\",\n  \"file_url\": \"https://s3.example.com/assets/nike-logo.png\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/assets",
+              "host": ["{{base_url}}"],
+              "path": ["api", "assets"]
+            },
+            "description": "Register a logo asset by S3 URL. `asset_id` is auto-saved. Omit `project_id` to make the asset available across all projects for this manager."
+          }
+        },
+
+        {
+          "name": "Create Caption Template",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"project_id\": \"{{project_id}}\",\n  \"type\": \"template\",\n  \"name\": \"Instagram Product Launch\",\n  \"content\": \"Introducing [PRODUCT_NAME] 🚀\\n\\n[MAIN_MESSAGE]\\n\\nAvailable now at [LINK]\\n\\n[HASHTAGS]\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/assets",
+              "host": ["{{base_url}}"],
+              "path": ["api", "assets"]
+            },
+            "description": "Create a reusable caption template for AI generation. Type: `template`."
+          }
+        },
+
+        {
+          "name": "Create AI Prompt",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"project_id\": \"{{project_id}}\",\n  \"type\": \"prompt\",\n  \"name\": \"Nike Brand Voice\",\n  \"content\": \"Write in Nike's brand voice: bold, empowering, action-oriented. Use short punchy sentences. Always end with a call to action. Target audience: athletes aged 18-35. Never use passive voice.\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/assets",
+              "host": ["{{base_url}}"],
+              "path": ["api", "assets"]
+            },
+            "description": "Store an AI instruction prompt for content generation. Type: `prompt`."
+          }
+        },
+
+        {
+          "name": "List Assets",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/assets",
+              "host": ["{{base_url}}"],
+              "path": ["api", "assets"]
+            },
+            "description": "List all assets for the authenticated manager across all projects."
+          }
+        },
+
+        {
+          "name": "List Assets by Project",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/assets?project_id={{project_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "assets"],
+              "query": [{ "key": "project_id", "value": "{{project_id}}" }]
+            },
+            "description": "List assets filtered to a specific project."
+          }
+        },
+
+        {
+          "name": "Delete Asset",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/assets/{{asset_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "assets", "{{asset_id}}"]
+            },
+            "description": "Delete an asset. Scoped to the authenticated manager — cannot delete another manager's assets."
+          }
+        }
+
+      ]
+    },
+
+    {
+      "name": "Notifications",
+      "description": "In-app notifications for managers and clients. (Requires notification-service — not yet built.)",
+      "item": [
+
+        {
+          "name": "List My Notifications",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/notifications",
+              "host": ["{{base_url}}"],
+              "path": ["api", "notifications"]
+            },
+            "description": "Fetch all notifications for the authenticated user. Filter with `?unread=true` for unread only."
+          }
+        },
+
+        {
+          "name": "List Unread Notifications",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/notifications?unread=true",
+              "host": ["{{base_url}}"],
+              "path": ["api", "notifications"],
+              "query": [{ "key": "unread", "value": "true" }]
+            },
+            "description": "Fetch only unread notifications."
+          }
+        },
+
+        {
+          "name": "Mark Notification as Read",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/notifications/{{notif_id}}/read",
+              "host": ["{{base_url}}"],
+              "path": ["api", "notifications", "{{notif_id}}", "read"]
+            },
+            "description": "Mark a single notification as read."
+          }
+        }
+
+      ]
+    },
+
+    {
+      "name": "Scheduler",
+      "description": "Schedule approved posts for publishing. (Requires scheduler-service — not yet built.)",
+      "item": [
+
+        {
+          "name": "Schedule a Post",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"post_id\": \"{{post_id}}\",\n  \"scheduled_at\": \"2026-05-01T09:00:00Z\",\n  \"platform\": \"instagram\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/schedule",
+              "host": ["{{base_url}}"],
+              "path": ["api", "schedule"]
+            },
+            "description": "Schedule an approved post for publishing. The post must have status `approved`. Emits `READY_TO_PUBLISH` at the scheduled time."
+          }
+        },
+
+        {
+          "name": "Cancel Schedule",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/schedule/{{post_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "schedule", "{{post_id}}"]
+            },
+            "description": "Cancel a pending scheduled post. Only works if status is still `pending` (not yet fired)."
+          }
+        }
+
+      ]
+    },
+
+    {
+      "name": "Health Checks",
+      "description": "Liveness checks for all services.",
+      "item": [
+
+        {
+          "name": "API Gateway",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": ["{{base_url}}"],
+              "path": ["health"]
+            }
+          }
+        },
+
+        {
+          "name": "User Service (direct)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:5001/health",
+              "raw": "http://localhost:5001/health",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5001",
+              "path": ["health"]
+            }
+          }
+        },
+
+        {
+          "name": "Content Service (direct)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:5002/health",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5002",
+              "path": ["health"]
+            }
+          }
+        },
+
+        {
+          "name": "Review Service (direct)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:5004/health",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5004",
+              "path": ["health"]
+            }
+          }
+        },
+
+        {
+          "name": "Query Service (direct)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:5005/health",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5005",
+              "path": ["health"]
+            }
+          }
+        }
+
+      ]
+    }
+
+  ]
+}

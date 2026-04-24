@@ -1,6 +1,6 @@
 # Wingman AI — Implementation TODO
 
-> **Last updated:** 2026-04-23
+> **Last updated:** 2026-04-24
 > **How to update:** Say "update todo list" — Claude Code will re-scan the codebase and refresh this file.
 
 ---
@@ -15,39 +15,43 @@
 ## Services
 
 ### api-gateway (port 4000)
-- [ ] Project folder created (`services/api-gateway/`)
-- [ ] Express app with `src/` folder structure
-- [ ] JWT verification middleware
-- [ ] `manager_id` injection from JWT into all forwarded requests
-- [ ] Route: `POST /api/auth/login` → user-service
-- [ ] Route: `POST /api/auth/register` → user-service
-- [ ] Route: `POST /api/content` → content-service
-- [ ] Route: `GET /api/content/:id` → content-service
-- [ ] Route: `GET /api/projects/:id/posts` → content-service
-- [ ] Route: `GET /api/projects` → query-service (dashboard read)
-- [ ] Route: `POST /api/review/:id` → review-service
-- [ ] Route: `GET /api/assets` → asset-service
-- [ ] Route: `POST /api/assets` → asset-service
-- [ ] Route: `GET /api/users` → user-service
-- [ ] Parallel fan-out for `GET /api/projects/:id/detail` (content + review + user)
-- [ ] Dockerfile
-- [ ] docker-compose entry
+- [x] Project folder created (`services/api-gateway/`)
+- [x] Express app with `src/` folder structure
+- [x] JWT verification middleware (`src/middleware/auth.js`)
+- [x] `manager_id` injection from JWT into all forwarded requests (`src/proxy/forward.js`)
+- [x] Route: `POST /api/auth/login` → user-service
+- [x] Route: `POST /api/auth/register` → user-service
+- [x] Route: `POST /api/content` → content-service
+- [x] Route: `GET /api/content/:id` → content-service
+- [x] Route: `GET /api/projects/:id/posts` → content-service
+- [x] Route: `GET /api/projects` → query-service (dashboard read)
+- [x] Route: `POST /api/review/:id` → review-service
+- [x] Route: `GET /api/assets` → asset-service
+- [x] Route: `POST /api/assets` → asset-service
+- [x] Route: `GET /api/users` → user-service
+- [x] Parallel fan-out for `GET /api/projects/:id/detail` (content + review + user)
+- [x] Dockerfile
+- [ ] docker-compose entry (in `docker-compose.dev.yml` for now)
 
 ---
 
 ### user-service (port 5001)
-- [ ] Project folder created (`services/user-service/`)
-- [ ] Express app with `src/` folder structure (`routes/`, `services/`, `db/`, `events/`)
-- [ ] `user_db` PostgreSQL schema: `managers`, `users`, `projects`, `project_members`
-- [ ] `POST /auth/register` — manager registration
-- [ ] `POST /auth/login` — JWT issuance
-- [ ] `GET /users` — list users for a manager
-- [ ] `POST /projects` — create project
-- [ ] `GET /projects` — list projects for a manager
-- [ ] `POST /projects/:id/members` — add member to project
-- [ ] `manager_id` filter on every DB query
-- [ ] Dockerfile
-- [ ] docker-compose entry with `user-db` dependency
+- [x] Project folder created (`services/user-service/`)
+- [x] Express app with `src/` folder structure (`routes/`, `services/`, `db/`)
+- [x] `user_db` PostgreSQL schema: `managers`, `users`, `projects`, `project_members`
+- [x] `POST /auth/register` — manager registration
+- [x] `POST /auth/login` — JWT issuance
+- [x] `GET /users` — list users for a manager
+- [x] `POST /users` — create user (client, team_member, viewer)
+- [x] `GET /users/:id` — get single user
+- [x] `GET /users/project/:id` — list members for a project (API composition)
+- [x] `POST /projects` — create project
+- [x] `GET /projects` — list projects for a manager
+- [x] `PATCH /projects/:id` — update project name/description/status
+- [x] `POST /projects/:id/members` — add member to project
+- [x] `manager_id` filter on every DB query
+- [x] Dockerfile
+- [x] docker-compose entry (`docker-compose.dev.yml` with `user-db` healthcheck dependency)
 
 ---
 
@@ -206,6 +210,22 @@
 - [ ] Replace single postgres with 7 separate DB containers: `user-db`, `content-db`, `asset-db`, `review-db`, `query-db`, `notif-db`, `schedule-db`
 - [ ] Add all 10 service definitions with correct ports, env vars, and `depends_on`
 - [ ] Add `frontend` service definition
+
+### docker-compose.dev.yml ← current dev/testing compose
+- [x] `user-db` container with schema init script (`docker/init/user-db.sql`)
+- [x] `user-service` with `DATABASE_URL` + `JWT_SECRET`
+- [x] `api-gateway` with all service URLs
+- [x] Healthcheck on `user-db` so service waits for DB to be ready
+- [ ] Add remaining DB containers as each service is built
+
+### DB Init Scripts (`docker/init/`)
+- [x] `user-db.sql` — managers, users, projects, project_members
+- [ ] `content-db.sql`
+- [ ] `asset-db.sql`
+- [ ] `review-db.sql`
+- [ ] `query-db.sql`
+- [ ] `notif-db.sql`
+- [ ] `schedule-db.sql`
 
 ### Environment
 - [ ] `.env.example` file created with all required vars (JWT_SECRET, AI keys, S3, email, social API)

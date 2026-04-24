@@ -1,0 +1,59 @@
+version: '3.9'
+
+# Dev compose for testing api-gateway + user-service only.
+# Run with: docker-compose -f docker-compose.dev.yml up --build
+
+services:
+
+  # ─── Database ────────────────────────────────────────────────────────────────
+  user-db:
+    image: postgres:15
+    container_name: wingman-user-db
+    restart: always
+    environment:
+      POSTGRES_DB: user_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - user-db-data:/var/lib/postgresql/data
+      - ./docker/init/user-db.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d user_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ─── Services ────────────────────────────────────────────────────────────────
+  user-service:
+    build: ./services/user-service
+    container_name: wingman-user-service
+    ports:
+      - "5001:5001"
+    environment:
+      PORT: 5001
+      DATABASE_URL: postgres://postgres:postgres@user-db:5432/user_db
+      JWT_SECRET: devsecret
+    depends_on:
+      user-db:
+        condition: service_healthy
+
+  api-gateway:
+    build: ./services/api-gateway
+    container_name: wingman-api-gateway
+    ports:
+      - "4000:4000"
+    environment:
+      PORT: 4000
+      JWT_SECRET: devsecret
+      USER_SERVICE_URL: http://user-service:5001
+      CONTENT_SERVICE_URL: http://content-service:5002
+      ASSET_SERVICE_URL: http://asset-service:5003
+      REVIEW_SERVICE_URL: http://review-service:5004
+      QUERY_SERVICE_URL: http://query-service:5005
+    depends_on:
+      - user-service
+
+volumes:
+  user-db-data:
