@@ -20,6 +20,11 @@ function getOpenAIClient() {
 }
 
 async function generateCaption(prompt) {
+  if (!process.env.GEMINI_API_KEY && !process.env.OPENAI_API_KEY) {
+    console.log('No AI API keys configured — returning mock caption');
+    return `[MOCK CAPTION] ${prompt}`;
+  }
+
   try {
     const model = getGeminiClient().getGenerativeModel({ model: 'gemini-1.5-flash' });
     const result = await model.generateContent(
