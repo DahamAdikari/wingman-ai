@@ -1,11 +1,34 @@
 version: '3.9'
 
-# Dev compose for testing api-gateway + user-service only.
+# Dev compose for testing api-gateway + user-service + content-service.
 # Run with: docker-compose -f docker-compose.dev.yml up --build
+#
+# Required env vars (create a .env file at the project root or export them):
+#   GEMINI_API_KEY     — Google Gemini API key (caption generation)
+#   OPENAI_API_KEY     — OpenAI API key (caption generation fallback)
+#   AI_IMAGE_API_URL   — Image generation API endpoint (optional; skipped if unset)
+#   AI_IMAGE_API_KEY   — Image generation API key      (optional; skipped if unset)
 
 services:
 
-  # ─── Database ────────────────────────────────────────────────────────────────
+  # ─── Message broker ──────────────────────────────────────────────────────────
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: wingman-rabbitmq
+    restart: always
+    ports:
+      - "5672:5672"     # AMQP
+      - "15672:15672"   # Management UI → http://localhost:15672 (admin / password)
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: password
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+  # ─── Databases ───────────────────────────────────────────────────────────────
   user-db:
     image: postgres:15
     container_name: wingman-user-db
@@ -17,7 +40,6 @@ services:
     ports:
       - "5433:5432"
     volumes:
-  content-db-data:
       - user-db-data:/var/lib/postgresql/data
       - ./docker/init/user-db.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
@@ -26,37 +48,6 @@ services:
       timeout: 5s
       retries: 10
 
-  # ─── Services ────────────────────────────────────────────────────────────────
-  user-service:
-    build: ./services/user-service
-    container_name: wingman-user-service
-    ports:
-      - "5001:5001"
-    environment:
-      PORT: 5001
-      DATABASE_URL: postgres://postgres:postgres@user-db:5432/user_db
-      JWT_SECRET: devsecret
-    depends_on:
-      user-db:
-        condition: service_healthy
-
-  api-gateway:
-    build: ./services/api-gateway
-    container_name: wingman-api-gateway
-    ports:
-      - "4000:4000"
-    environment:
-      PORT: 4000
-      JWT_SECRET: devsecret
-      USER_SERVICE_URL: http://user-service:5001
-      CONTENT_SERVICE_URL: http://content-service:5002
-      ASSET_SERVICE_URL: http://asset-service:5003
-      REVIEW_SERVICE_URL: http://review-service:5004
-      QUERY_SERVICE_URL: http://query-service:5005
-    depends_on:
-      - user-service
-
-  # ────────────────────────────────────────────────────────────────────────────
   content-db:
     image: postgres:15
     container_name: wingman-content-db
@@ -75,6 +66,20 @@ services:
       timeout: 5s
       retries: 10
 
+  # ─── Services ────────────────────────────────────────────────────────────────
+  user-service:
+    build: ./services/user-service
+    container_name: wingman-user-service
+    ports:
+      - "5001:5001"
+    environment:
+      PORT: 5001
+      DATABASE_URL: postgres://postgres:postgres@user-db:5432/user_db
+      JWT_SECRET: devsecret
+    depends_on:
+      user-db:
+        condition: service_healthy
+
   content-service:
     build: ./services/content-service
     container_name: wingman-content-service
@@ -83,11 +88,34 @@ services:
     environment:
       PORT: 5002
       DATABASE_URL: postgres://postgres:postgres@content-db:5432/content_db
-      JWT_SECRET: devsecret
+      RABBITMQ_URL: amqp://admin:password@rabbitmq:5672
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      AI_IMAGE_API_URL: ${AI_IMAGE_API_URL:-}
+      AI_IMAGE_API_KEY: ${AI_IMAGE_API_KEY:-}
     depends_on:
       content-db:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  api-gateway:
+    build: ./services/api-gateway
+    container_name: wingman-api-gateway
+    ports:
+      - "4000:4000"
+    environment:
+      PORT: 4000
+      JWT_SECRET: devsecret
+      USER_SERVICE_URL: http://user-service:5001
+      CONTENT_SERVICE_URL: http://content-service:5002
+      ASSET_SERVICE_URL: http://asset-service:5003
+      REVIEW_SERVICE_URL: http://review-service:5004
+      QUERY_SERVICE_URL: http://query-service:5005
+    depends_on:
+      - user-service
+      - content-service
 
 volumes:
-  content-db-data:
   user-db-data:
+  content-db-data:
