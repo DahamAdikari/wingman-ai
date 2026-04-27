@@ -47,6 +47,14 @@ describe('POST /content', () => {
     expect(res.status).toBe(400);
   });
 
+  it('returns 400 when platform is not a valid value', async () => {
+    const res = await request(app)
+      .post('/content')
+      .set('x-manager-id', MANAGER_ID)
+      .send({ project_id: PROJECT_ID, platform: 'tiktok', prompt: 'test' });
+    expect(res.status).toBe(400);
+  });
+
   it('returns 201 and the created post on success', async () => {
     const mockResult = {
       post: { id: POST_ID, project_id: PROJECT_ID, platform: 'instagram', status: 'manager_review' },

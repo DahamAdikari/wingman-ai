@@ -1,55 +1,22 @@
 jest.mock('../../src/db/queries');
 jest.mock('../../src/events/publisher');
 jest.mock('../../src/services/imageService');
-jest.mock('@google/generative-ai');
-jest.mock('openai');
+jest.mock('../../src/services/captionService');
 
 const { createNewPost, regenerateContent } = require('../../src/services/contentService');
 const queries = require('../../src/db/queries');
 const { publish } = require('../../src/events/publisher');
 const { generateImage } = require('../../src/services/imageService');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
-const OpenAI = require('openai');
+const { generateCaption } = require('../../src/services/captionService');
 
 const MANAGER_ID = 'manager-uuid';
 const PROJECT_ID = 'project-uuid';
 const POST_ID = 'post-uuid';
 const VERSION_ID = 'version-uuid';
 
-function mockGeminiSuccess(caption = 'Generated caption') {
-  GoogleGenerativeAI.mockImplementation(() => ({
-    getGenerativeModel: () => ({
-      generateContent: jest.fn().mockResolvedValue({
-        response: { text: () => caption },
-      }),
-    }),
-  }));
-}
-
-function mockGeminiFailure() {
-  GoogleGenerativeAI.mockImplementation(() => ({
-    getGenerativeModel: () => ({
-      generateContent: jest.fn().mockRejectedValue(new Error('Gemini unavailable')),
-    }),
-  }));
-}
-
-function mockOpenAISuccess(caption = 'OpenAI caption') {
-  OpenAI.mockImplementation(() => ({
-    chat: {
-      completions: {
-        create: jest.fn().mockResolvedValue({
-          choices: [{ message: { content: caption } }],
-        }),
-      },
-    },
-  }));
-}
-
 beforeEach(() => {
   jest.clearAllMocks();
-  mockGeminiSuccess();
-  mockOpenAISuccess();
+  generateCaption.mockResolvedValue('Generated caption');
   generateImage.mockResolvedValue('https://s3.example.com/image.jpg');
   publish.mockResolvedValue();
 });
@@ -144,17 +111,6 @@ describe('createNewPost', () => {
     expect(result).toBeDefined();
     expect(queries.createPostVersion).toHaveBeenCalledWith(expect.objectContaining({
       image_url: null,
-    }));
-  });
-
-  it('falls back to OpenAI when Gemini fails', async () => {
-    mockGeminiFailure();
-    mockOpenAISuccess('OpenAI caption');
-
-    await createNewPost({ manager_id: MANAGER_ID, project_id: PROJECT_ID, platform: 'instagram', prompt: 'test' });
-
-    expect(queries.createPostVersion).toHaveBeenCalledWith(expect.objectContaining({
-      caption_text: 'OpenAI caption',
     }));
   });
 });

@@ -39,6 +39,16 @@ async function initializeTables() {
       prompt_text TEXT         NOT NULL,
       created_at  TIMESTAMP    DEFAULT NOW()
     );
+
+    CREATE TABLE IF NOT EXISTS asset_cache (
+      id          UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+      asset_id    UUID         NOT NULL UNIQUE,
+      manager_id  UUID         NOT NULL,
+      project_id  UUID,
+      type        VARCHAR(100) NOT NULL,
+      file_url    TEXT,
+      cached_at   TIMESTAMP    DEFAULT NOW()
+    );
   `);
   console.log('Content DB tables ready');
 }

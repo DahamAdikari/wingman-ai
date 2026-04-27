@@ -3,8 +3,10 @@ const router = express.Router();
 const { createNewPost } = require('../services/contentService');
 const { getPostById, getPostsByProject } = require('../db/queries');
 
+const VALID_PLATFORMS = ['instagram', 'linkedin', 'twitter'];
+
 function getManagerId(req) {
-  return req.headers['x-manager-id'] || req.body?.manager_id;
+  return req.headers['x-manager-id'];
 }
 
 // POST /content — create a new post and generate content
@@ -15,6 +17,9 @@ router.post('/', async (req, res) => {
   const { project_id, platform, prompt, image_prompt } = req.body;
   if (!project_id || !platform || !prompt) {
     return res.status(400).json({ error: 'project_id, platform, and prompt are required' });
+  }
+  if (!VALID_PLATFORMS.includes(platform)) {
+    return res.status(400).json({ error: `platform must be one of: ${VALID_PLATFORMS.join(', ')}` });
   }
 
   try {

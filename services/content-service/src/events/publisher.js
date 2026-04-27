@@ -1,10 +1,10 @@
-const amqp = require('amqplib');
+const { connectWithRetry } = require('./connect');
 
 const EXCHANGE = 'wingman.events';
 let channel;
 
 async function connect() {
-  const conn = await amqp.connect(process.env.RABBITMQ_URL);
+  const conn = await connectWithRetry();
   channel = await conn.createChannel();
   await channel.assertExchange(EXCHANGE, 'topic', { durable: true });
 }

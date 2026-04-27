@@ -1,11 +1,12 @@
-const amqp = require('amqplib');
+const { connectWithRetry } = require('./connect');
 
 const EXCHANGE = 'wingman.events';
 const QUEUE = 'content-service-queue';
-const BINDINGS = ['CLIENT_FEEDBACK', 'CONTENT_REJECTED'];
+const BINDINGS = ['CLIENT_FEEDBACK', 'CONTENT_REJECTED', 'ASSET_UPLOADED'];
 
-async function startConsumer() {
-  const conn = await amqp.connect(process.env.RABBITMQ_URL);
+// Handlers are injected from index.js to avoid circular dependencies at module load time.
+async function startConsumer({ regenerateContent, cacheAsset }) {
+  const conn = await connectWithRetry();
   const channel = await conn.createChannel();
   await channel.assertExchange(EXCHANGE, 'topic', { durable: true });
 
@@ -20,13 +21,21 @@ async function startConsumer() {
     console.log(`Received event: ${payload.event}`);
 
     try {
-      // Lazy require to avoid circular dependency at module load time
-      const { regenerateContent } = require('../services/contentService');
-      await regenerateContent({
-        post_id: payload.post_id,
-        manager_id: payload.manager_id,
-        revision_notes: payload.feedback_text,
-      });
+      if (payload.event === 'CLIENT_FEEDBACK' || payload.event === 'CONTENT_REJECTED') {
+        await regenerateContent({
+          post_id: payload.post_id,
+          manager_id: payload.manager_id,
+          revision_notes: payload.feedback_text,
+        });
+      } else if (payload.event === 'ASSET_UPLOADED') {
+        await cacheAsset({
+          asset_id: payload.asset_id,
+          manager_id: payload.manager_id,
+          project_id: payload.project_id,
+          type: payload.type,
+          file_url: payload.file_url,
+        });
+      }
       channel.ack(msg);
     } catch (err) {
       console.error('Failed to handle event:', payload.event, err.message);

@@ -1,5 +1,4 @@
-const { GoogleGenerativeAI } = require('@google/generative-ai');
-const OpenAI = require('openai');
+const { generateCaption } = require('./captionService');
 const { generateImage } = require('./imageService');
 const {
   createPost,
@@ -9,38 +8,6 @@ const {
   getLatestVersionNumber,
 } = require('../db/queries');
 const { publish } = require('../events/publisher');
-
-// ─── Text generation (Gemini → OpenAI fallback) ──────────────────────────────
-
-async function generateCaption(prompt) {
-  try {
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-    const result = await model.generateContent(
-      `Write a social media caption for the following topic. Return only the caption text, no JSON.\n\nTopic: ${prompt}`
-    );
-    return result.response.text().trim();
-  } catch (err) {
-    console.log('Gemini failed, falling back to OpenAI:', err.message);
-    return generateCaptionWithOpenAI(prompt);
-  }
-}
-
-async function generateCaptionWithOpenAI(prompt) {
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  const response = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
-    messages: [
-      {
-        role: 'user',
-        content: `Write a social media caption for the following topic. Return only the caption text.\n\nTopic: ${prompt}`,
-      },
-    ],
-  });
-  return response.choices[0].message.content.trim();
-}
-
-// ─── Public service methods ───────────────────────────────────────────────────
 
 async function createNewPost({ manager_id, project_id, platform, prompt, image_prompt }) {
   const caption_text = await generateCaption(prompt);
@@ -77,7 +44,6 @@ async function regenerateContent({ post_id, manager_id, revision_notes }) {
   const rows = await getPostById(post_id, manager_id);
   if (!rows.length) throw new Error(`Post ${post_id} not found for manager ${manager_id}`);
 
-  const post = rows[0];
   const latestVersion = rows[0]; // newest version is first (ORDER BY version_number DESC)
 
   const revisedPrompt = revision_notes
@@ -103,9 +69,9 @@ async function regenerateContent({ post_id, manager_id, revision_notes }) {
   await publish('CONTENT_CREATED', {
     post_id,
     post_version_id: version.id,
-    project_id: post.project_id,
+    project_id: latestVersion.project_id,
     manager_id,
-    platform: post.platform,
+    platform: latestVersion.platform,
     caption_text,
     image_url,
   });

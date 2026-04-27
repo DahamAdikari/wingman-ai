@@ -67,6 +67,17 @@ async function getLatestVersionNumber(post_id) {
   return rows[0].max;
 }
 
+// Upsert an asset reference received via ASSET_UPLOADED event.
+// Stores URL/ID only — never the actual file (which lives in asset-service's S3).
+async function cacheAsset({ asset_id, manager_id, project_id, type, file_url }) {
+  await pool.query(
+    `INSERT INTO asset_cache (asset_id, manager_id, project_id, type, file_url)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (asset_id) DO UPDATE SET file_url = EXCLUDED.file_url, cached_at = NOW()`,
+    [asset_id, manager_id, project_id, type, file_url]
+  );
+}
+
 module.exports = {
   createPost,
   createPostVersion,
@@ -74,4 +85,5 @@ module.exports = {
   getPostById,
   getPostsByProject,
   getLatestVersionNumber,
+  cacheAsset,
 };
