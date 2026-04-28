@@ -66,6 +66,24 @@ services:
       timeout: 5s
       retries: 10
 
+  query-db:
+    image: postgres:15
+    container_name: wingman-query-db
+    restart: always
+    environment:
+      POSTGRES_DB: query_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5437:5432"
+    volumes:
+      - query-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d query_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   # ─── Services ────────────────────────────────────────────────────────────────
   user-service:
     build: ./services/user-service
@@ -99,6 +117,21 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  query-service:
+    build: ./services/query-service
+    container_name: wingman-query-service
+    ports:
+      - "5005:5005"
+    environment:
+      PORT: 5005
+      DATABASE_URL: postgres://postgres:postgres@query-db:5432/query_db
+      RABBITMQ_URL: amqp://admin:password@rabbitmq:5672
+    depends_on:
+      query-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
   api-gateway:
     build: ./services/api-gateway
     container_name: wingman-api-gateway
@@ -115,7 +148,9 @@ services:
     depends_on:
       - user-service
       - content-service
+      - query-service
 
 volumes:
   user-db-data:
   content-db-data:
+  query-db-data:
