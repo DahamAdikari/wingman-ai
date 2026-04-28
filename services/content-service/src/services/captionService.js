@@ -5,35 +5,43 @@ const OpenAI = require('openai');
 let _geminiClient = null;
 let _openaiClient = null;
 
-function getGeminiClient() {
+function getGeminiClient(apiKey) {
   if (!_geminiClient) {
-    _geminiClient = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    _geminiClient = new GoogleGenerativeAI(apiKey);
   }
   return _geminiClient;
 }
 
-function getOpenAIClient() {
+function getOpenAIClient(apiKey) {
   if (!_openaiClient) {
-    _openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    _openaiClient = new OpenAI({ apiKey });
   }
   return _openaiClient;
 }
 
 async function generateCaption(prompt) {
-  if (!process.env.GEMINI_API_KEY && !process.env.OPENAI_API_KEY) {
+  const geminiKey = (process.env.GEMINI_API_KEY || '').trim();
+  const openaiKey = (process.env.OPENAI_API_KEY || '').trim();
+
+  if (!geminiKey && !openaiKey) {
     console.log('No AI API keys configured — returning mock caption');
     return `[MOCK CAPTION] ${prompt}`;
   }
 
-  try {
-    const model = getGeminiClient().getGenerativeModel({ model: 'gemini-1.5-flash' });
-    const result = await model.generateContent(
-      `Write a social media caption for the following topic. Return only the caption text, no JSON.\n\nTopic: ${prompt}`
-    );
-    return result.response.text().trim();
-  } catch (err) {
-    console.log('Gemini failed, falling back to OpenAI:', err.message);
-    const response = await getOpenAIClient().chat.completions.create({
+  if (geminiKey) {
+    try {
+      const model = getGeminiClient(geminiKey).getGenerativeModel({ model: 'gemini-1.5-flash' });
+      const result = await model.generateContent(
+        `Write a social media caption for the following topic. Return only the caption text, no JSON.\n\nTopic: ${prompt}`
+      );
+      return result.response.text().trim();
+    } catch (err) {
+      console.log('Gemini failed, falling back to OpenAI:', err.message);
+    }
+  }
+
+  if (openaiKey) {
+    const response = await getOpenAIClient(openaiKey).chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [
         {
@@ -44,6 +52,9 @@ async function generateCaption(prompt) {
     });
     return response.choices[0].message.content.trim();
   }
+
+  console.log('All AI providers failed or unconfigured — returning mock caption');
+  return `[MOCK CAPTION] ${prompt}`;
 }
 
 module.exports = { generateCaption };
