@@ -33,7 +33,8 @@ router.get('/:id/posts', (req, res) => {
   forward(req, res, `${CONTENT_SERVICE}/content/project/${req.params.id}`);
 });
 
-// GET /api/projects/:id/detail → API Composition (parallel fan-out)
+// GET /api/projects/:id/detail → API Composition (parallel fan-out, partial-failure tolerant)
+// Each section carries { available, data } so the frontend can render what it has.
 router.get('/:id/detail', async (req, res) => {
   const { id } = req.params;
   const headers = {
@@ -42,22 +43,26 @@ router.get('/:id/detail', async (req, res) => {
     'x-user-role': req.role || '',
   };
 
-  try {
-    const [contentRes, reviewRes, membersRes] = await Promise.all([
-      axios.get(`${CONTENT_SERVICE}/content/project/${id}`, { headers, validateStatus: () => true }),
-      axios.get(`${REVIEW_SERVICE}/review/project/${id}`, { headers, validateStatus: () => true }),
-      axios.get(`${USER_SERVICE}/users/project/${id}`, { headers, validateStatus: () => true }),
-    ]);
+  const [contentResult, reviewResult, membersResult] = await Promise.allSettled([
+    axios.get(`${CONTENT_SERVICE}/content/project/${id}`, { headers, validateStatus: () => true }),
+    axios.get(`${REVIEW_SERVICE}/review/project/${id}`, { headers, validateStatus: () => true }),
+    axios.get(`${USER_SERVICE}/users/project/${id}`, { headers, validateStatus: () => true }),
+  ]);
 
-    res.json({
-      content: contentRes.data,
-      reviews: reviewRes.data,
-      members: membersRes.data,
-    });
-  } catch (err) {
-    console.error(`[detail composition] project ${id} — ${err.message}`);
-    res.status(502).json({ error: 'Service unavailable' });
+  function toSection(result, label) {
+    if (result.status === 'fulfilled' && result.value.status < 500) {
+      return { available: true, data: result.value.data };
+    }
+    const reason = result.reason?.message || `HTTP ${result.value?.status}`;
+    console.warn(`[detail composition] project ${id} — ${label} unavailable: ${reason}`);
+    return { available: false, data: null };
   }
+
+  res.json({
+    content: toSection(contentResult, 'content-service'),
+    reviews: toSection(reviewResult, 'review-service'),
+    members: toSection(membersResult, 'user-service'),
+  });
 });
 
 module.exports = router;
