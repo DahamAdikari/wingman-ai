@@ -4,7 +4,6 @@ const pool = require('./pool');
 // `updateClause` is a SQL fragment like "total_posts = total_posts + 1"
 // `extraParams` are additional bind params after [$1=id, $2=manager_id].
 async function upsertProjectView(project_id, manager_id, updateClause, extraParams = []) {
-  // Insert a skeleton row if the project has never been seen before.
   await pool.query(
     `INSERT INTO projects_view (id, manager_id, last_updated)
      VALUES ($1, $2, NOW())
@@ -20,6 +19,18 @@ async function upsertProjectView(project_id, manager_id, updateClause, extraPara
   );
 }
 
+// Look up project_id and manager_id from a post_id stored in posts_map.
+// Returns null if not found (e.g. event arrived before CONTENT_CREATED).
+async function resolvePost(post_id) {
+  const { rows } = await pool.query(
+    `SELECT project_id, manager_id FROM posts_map WHERE post_id = $1`,
+    [post_id]
+  );
+  return rows[0] ?? null;
+}
+
+// ── Event handlers ────────────────────────────────────────────────────────────
+
 // PROJECT_CREATED — seed the row with the project name
 async function onProjectCreated({ project_id, manager_id, project_name }) {
   await pool.query(
@@ -30,8 +41,16 @@ async function onProjectCreated({ project_id, manager_id, project_name }) {
   );
 }
 
-// CONTENT_CREATED — new post, increment total
-async function onContentCreated({ project_id, manager_id }) {
+// CONTENT_CREATED — new post; increment total and record the post→project mapping
+async function onContentCreated({ post_id, project_id, manager_id }) {
+  // Store mapping so future events (e.g. POST_PUBLISHED) can resolve project_id
+  await pool.query(
+    `INSERT INTO posts_map (post_id, project_id, manager_id)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (post_id) DO NOTHING`,
+    [post_id, project_id, manager_id]
+  );
+
   await upsertProjectView(
     project_id,
     manager_id,
@@ -40,13 +59,13 @@ async function onContentCreated({ project_id, manager_id }) {
   );
 }
 
-// MANAGER_APPROVED — post moved to client_review stage
+// MANAGER_APPROVED — manager approved; post moves to client_review stage
 async function onManagerApproved({ project_id, manager_id }) {
   await upsertProjectView(
     project_id,
     manager_id,
     `posts_in_review = posts_in_review + 1,
-     last_post_status = 'manager_review'`
+     last_post_status = 'client_review'`  // was wrongly 'manager_review'
   );
 }
 
@@ -72,7 +91,7 @@ async function onContentApproved({ project_id, manager_id }) {
   );
 }
 
-// CONTENT_REJECTED — rejected, needs regen
+// CONTENT_REJECTED — rejected by manager or client, needs regeneration
 async function onContentRejected({ project_id, manager_id }) {
   await upsertProjectView(
     project_id,
@@ -82,11 +101,17 @@ async function onContentRejected({ project_id, manager_id }) {
   );
 }
 
-// POST_PUBLISHED — post successfully published
-async function onPostPublished({ project_id, manager_id }) {
+// POST_PUBLISHED — POST_PUBLISHED payload has no project_id, resolve via posts_map
+async function onPostPublished({ post_id, manager_id }) {
+  const resolved = await resolvePost(post_id);
+  if (!resolved) {
+    console.warn(`[query] POST_PUBLISHED: no posts_map entry for post_id=${post_id}, skipping`);
+    return;
+  }
+
   await upsertProjectView(
-    project_id,
-    manager_id,
+    resolved.project_id,
+    manager_id ?? resolved.manager_id,
     `posts_approved   = GREATEST(posts_approved - 1, 0),
      posts_published  = posts_published + 1,
      last_post_status = 'published'`
