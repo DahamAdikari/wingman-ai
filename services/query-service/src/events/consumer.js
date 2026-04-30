@@ -1,5 +1,6 @@
 const { connectWithRetry } = require('./connect');
 const {
+  onProjectCreated,
   onContentCreated,
   onManagerApproved,
   onClientFeedback,
@@ -11,6 +12,7 @@ const {
 const EXCHANGE = 'wingman.events';
 const QUEUE = 'query-service-queue';
 const BINDINGS = [
+  'PROJECT_CREATED',
   'CONTENT_CREATED',
   'MANAGER_APPROVED',
   'CLIENT_FEEDBACK',
@@ -36,6 +38,9 @@ async function startConsumer() {
 
     try {
       switch (payload.event) {
+        case 'PROJECT_CREATED':
+          await onProjectCreated(payload);
+          break;
         case 'CONTENT_CREATED':
           await onContentCreated(payload);
           break;

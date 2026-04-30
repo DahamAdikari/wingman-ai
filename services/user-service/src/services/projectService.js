@@ -1,4 +1,5 @@
 const db = require('../db/queries');
+const publisher = require('../events/publisher');
 
 const VALID_MEMBER_ROLES = ['client', 'reviewer', 'viewer'];
 
@@ -8,7 +9,13 @@ async function listProjects(manager_id) {
 
 async function createProject({ manager_id, name, description }) {
   if (!name) throw new Error('Project name is required');
-  return db.createProject({ manager_id, name, description });
+  const project = await db.createProject({ manager_id, name, description });
+  await publisher.publish('PROJECT_CREATED', {
+    project_id: project.id,
+    manager_id: project.manager_id,
+    project_name: project.name,
+  });
+  return project;
 }
 
 async function updateProject({ id, manager_id, name, description, status }) {

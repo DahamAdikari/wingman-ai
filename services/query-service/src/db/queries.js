@@ -20,6 +20,16 @@ async function upsertProjectView(project_id, manager_id, updateClause, extraPara
   );
 }
 
+// PROJECT_CREATED — seed the row with the project name
+async function onProjectCreated({ project_id, manager_id, project_name }) {
+  await pool.query(
+    `INSERT INTO projects_view (id, manager_id, project_name, last_updated)
+     VALUES ($1, $2, $3, NOW())
+     ON CONFLICT (id) DO UPDATE SET project_name = EXCLUDED.project_name`,
+    [project_id, manager_id, project_name]
+  );
+}
+
 // CONTENT_CREATED — new post, increment total
 async function onContentCreated({ project_id, manager_id }) {
   await upsertProjectView(
@@ -95,6 +105,7 @@ async function getProjectsForManager(manager_id) {
 }
 
 module.exports = {
+  onProjectCreated,
   onContentCreated,
   onManagerApproved,
   onClientFeedback,
