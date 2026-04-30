@@ -3,7 +3,8 @@ import { useNavigate, Link } from 'react-router-dom';
 import apiClient from '../api/client';
 import { useAuthStore } from '../store';
 
-export default function Login() {
+export default function Register() {
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -14,18 +15,26 @@ export default function Login() {
     e.preventDefault();
     setError('');
     try {
-      const { data } = await apiClient.post('/api/auth/login', { email, password });
+      const { data } = await apiClient.post('/api/auth/register', { name, email, password });
       login(data.token);
       navigate('/dashboard');
-    } catch {
-      setError('Invalid credentials');
+    } catch (err) {
+      setError(err.response?.data?.error || 'Registration failed');
     }
   }
 
   return (
     <div className="login-page">
       <h1>Wingman AI</h1>
+      <h2>Create Manager Account</h2>
       <form onSubmit={handleSubmit}>
+        <input
+          type="text"
+          placeholder="Full name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          required
+        />
         <input
           type="email"
           placeholder="Email"
@@ -41,10 +50,10 @@ export default function Login() {
           required
         />
         {error && <p className="error">{error}</p>}
-        <button type="submit">Sign In</button>
+        <button type="submit">Register</button>
       </form>
       <p>
-        No account? <Link to="/register">Register as a manager</Link>
+        Already have an account? <Link to="/login">Sign in</Link>
       </p>
     </div>
   );

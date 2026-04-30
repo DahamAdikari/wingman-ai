@@ -36,8 +36,9 @@ app.use('/api/review', reviewRoutes);
 app.use('/api/assets', assetRoutes);
 app.use('/api/users', userRoutes);
 
-// 404 fallback
+// 404 fallback — log unhandled routes so missing routes are visible in gateway logs
 app.use((req, res) => {
+  console.warn(`[404] Unhandled route: ${req.method} ${req.originalUrl}`);
   res.status(404).json({ error: 'Route not found' });
 });
 
