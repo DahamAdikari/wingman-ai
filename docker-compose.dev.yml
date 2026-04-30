@@ -116,6 +116,22 @@ services:
       - user-service
       - content-service
 
+  # ─── Frontend ────────────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: wingman-frontend
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_URL: http://localhost:4000
+      VITE_WS_URL: ws://localhost:5006
+    volumes:
+      - ./frontend/src:/app/src       # hot-reload: source changes reflect instantly
+    depends_on:
+      - api-gateway
+
 volumes:
   user-db-data:
   content-db-data:
