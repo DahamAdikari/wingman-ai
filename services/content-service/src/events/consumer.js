@@ -2,10 +2,10 @@ const { connectWithRetry } = require('./connect');
 
 const EXCHANGE = 'wingman.events';
 const QUEUE = 'content-service-queue';
-const BINDINGS = ['CLIENT_FEEDBACK', 'CONTENT_REJECTED', 'ASSET_UPLOADED'];
+const BINDINGS = ['CLIENT_FEEDBACK', 'CONTENT_REJECTED', 'ASSET_UPLOADED', 'MANAGER_APPROVED', 'CONTENT_APPROVED'];
 
 // Handlers are injected from index.js to avoid circular dependencies at module load time.
-async function startConsumer({ regenerateContent, cacheAsset }) {
+async function startConsumer({ regenerateContent, cacheAsset, updatePostStatus }) {
   const conn = await connectWithRetry();
   const channel = await conn.createChannel();
   await channel.assertExchange(EXCHANGE, 'topic', { durable: true });
@@ -27,6 +27,10 @@ async function startConsumer({ regenerateContent, cacheAsset }) {
           manager_id: payload.manager_id,
           revision_notes: payload.feedback_text,
         });
+      } else if (payload.event === 'MANAGER_APPROVED') {
+        await updatePostStatus(payload.post_id, payload.manager_id, 'client_review');
+      } else if (payload.event === 'CONTENT_APPROVED') {
+        await updatePostStatus(payload.post_id, payload.manager_id, 'approved');
       } else if (payload.event === 'ASSET_UPLOADED') {
         await cacheAsset({
           asset_id: payload.asset_id,

@@ -9,18 +9,20 @@ export default function PostDetail() {
   const navigate  = useNavigate();
   const { user }  = useAuth();
 
-  const [post, setPost]         = useState(null);   // latest row (post meta + version)
-  const [versions, setVersions] = useState([]);
-  const [reviews, setReviews]   = useState([]);
-  const [loading, setLoading]   = useState(true);
-  const [feedback, setFeedback] = useState('');
-  const [submitting, setSubmitting]   = useState(false);
+  const [post, setPost]             = useState(null);   // latest row (post meta + version)
+  const [versions, setVersions]     = useState([]);
+  const [reviews, setReviews]       = useState([]);
+  const [approvalStage, setApprovalStage] = useState(null); // from review service — always in sync
+  const [loading, setLoading]       = useState(true);
+  const [feedback, setFeedback]     = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
 
   const loadData = useCallback(async () => {
-    const [contentRes, reviewRes] = await Promise.allSettled([
+    const [contentRes, reviewRes, stateRes] = await Promise.allSettled([
       apiClient.get(`/api/content/${id}`),
       apiClient.get(`/api/review/${id}`),
+      apiClient.get(`/api/review/${id}/state`),
     ]);
 
     if (contentRes.status === 'fulfilled') {
@@ -34,6 +36,10 @@ export default function PostDetail() {
     if (reviewRes.status === 'fulfilled') {
       const data = reviewRes.value.data;
       setReviews(Array.isArray(data) ? data : []);
+    }
+
+    if (stateRes.status === 'fulfilled') {
+      setApprovalStage(stateRes.value.data?.current_stage ?? null);
     }
   }, [id]);
 
@@ -89,8 +95,11 @@ export default function PostDetail() {
     );
   }
 
-  const isManagerReview = post.status === 'manager_review';
-  const isRegenerating  = post.status === 'rejected';
+  // approvalStage comes from the review service and is updated synchronously on every review action.
+  // post.status (from content service) lags by one async event, so use approvalStage for UI decisions.
+  const currentStage    = approvalStage ?? post.status;
+  const isManagerReview = currentStage === 'manager_review';
+  const isRegenerating  = currentStage === 'rejected';
 
   return (
     <div className="page">
@@ -106,7 +115,7 @@ export default function PostDetail() {
         <h1 className="page-title" style={{ textTransform: 'capitalize' }}>
           {post.platform} post
         </h1>
-        <StatusBadge status={post.status} />
+        <StatusBadge status={currentStage} />
       </div>
 
       {/* Latest generated content */}
