@@ -359,9 +359,10 @@
                 "type": "text/javascript",
                 "exec": [
                   "const res = pm.response.json();",
-                  "if (res.id) {",
-                  "    pm.collectionVariables.set('post_id', res.id);",
-                  "    console.log('post_id saved:', res.id);",
+                  "const postId = res.post?.id || res.id;",
+                  "if (postId) {",
+                  "    pm.collectionVariables.set('post_id', postId);",
+                  "    console.log('post_id saved:', postId);",
                   "}"
                 ]
               }
@@ -375,7 +376,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"project_id\": \"{{project_id}}\",\n  \"platform\": \"instagram\",\n  \"image_prompt\": \"A vibrant Nike running shoe on a city street at sunrise, energetic mood, photorealistic\",\n  \"caption_brief\": \"Launch campaign for Air Max 2026 — motivational tone, include #JustDoIt\"\n}",
+              "raw": "{\n  \"project_id\": \"{{project_id}}\",\n  \"platform\": \"instagram\",\n  \"image_prompt\": \"A vibrant Nike running shoe on a city street at sunrise, energetic mood, photorealistic\",\n  \"prompt\": \"Launch campaign for Air Max 2026 — motivational tone, include #JustDoIt\"\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {
@@ -397,7 +398,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"project_id\": \"{{project_id}}\",\n  \"platform\": \"linkedin\",\n  \"image_prompt\": \"Professional Nike brand imagery, corporate setting, clean white background\",\n  \"caption_brief\": \"B2B partnership announcement — formal tone, 200 words max\"\n}",
+              "raw": "{\n  \"project_id\": \"{{project_id}}\",\n  \"platform\": \"linkedin\",\n  \"image_prompt\": \"Professional Nike brand imagery, corporate setting, clean white background\",\n  \"prompt\": \"B2B partnership announcement — formal tone, 200 words max\"\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {
@@ -441,7 +442,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"reviewer_role\": \"manager\",\n  \"decision\": \"approved\",\n  \"feedback_text\": \"Looks great, sending to client.\"\n}",
+              "raw": "{\n  \"reviewer_id\": \"{{manager_id}}\",\n  \"reviewer_role\": \"manager\",\n  \"decision\": \"approved\",\n  \"feedback_text\": \"Looks great, sending to client.\"\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {
@@ -463,7 +464,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"reviewer_role\": \"manager\",\n  \"decision\": \"rejected\",\n  \"feedback_text\": \"The image doesn't match the brand guidelines. Please use darker tones and remove the text overlay.\"\n}",
+              "raw": "{\n  \"reviewer_id\": \"{{manager_id}}\",\n  \"reviewer_role\": \"manager\",\n  \"decision\": \"rejected\",\n  \"feedback_text\": \"The image doesn't match the brand guidelines. Please use darker tones and remove the text overlay.\"\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {
@@ -485,7 +486,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"reviewer_role\": \"manager\",\n  \"decision\": \"changes_requested\",\n  \"feedback_text\": \"Caption is too long. Shorten to under 100 words and make the tone more casual.\"\n}",
+              "raw": "{\n  \"reviewer_id\": \"{{manager_id}}\",\n  \"reviewer_role\": \"manager\",\n  \"decision\": \"changes_requested\",\n  \"feedback_text\": \"Caption is too long. Shorten to under 100 words and make the tone more casual.\"\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {
@@ -507,7 +508,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"reviewer_role\": \"client\",\n  \"decision\": \"approved\",\n  \"feedback_text\": \"Perfect! This represents our brand well.\"\n}",
+              "raw": "{\n  \"reviewer_id\": \"{{user_id}}\",\n  \"reviewer_role\": \"client\",\n  \"decision\": \"approved\",\n  \"feedback_text\": \"Perfect! This represents our brand well.\"\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {
@@ -529,7 +530,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"reviewer_role\": \"client\",\n  \"decision\": \"changes_requested\",\n  \"feedback_text\": \"Please make the tone more formal and add our product tagline: 'Built to Last'.\"\n}",
+              "raw": "{\n  \"reviewer_id\": \"{{user_id}}\",\n  \"reviewer_role\": \"client\",\n  \"decision\": \"changes_requested\",\n  \"feedback_text\": \"Please make the tone more formal and add our product tagline: 'Built to Last'.\"\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {

@@ -113,4 +113,8 @@ async function getApprovalState(post_id, manager_id) {
   return state;
 }
 
-module.exports = { initApprovalState, submitReview, getReviewHistory, getApprovalState };
+async function getProjectReviews(project_id, manager_id) {
+  return queries.getReviewsByProject(project_id, manager_id);
+}
+
+module.exports = { initApprovalState, submitReview, getReviewHistory, getApprovalState, getProjectReviews };

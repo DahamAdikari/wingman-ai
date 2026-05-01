@@ -1,7 +1,22 @@
 const express = require('express');
-const { submitReview, getReviewHistory, getApprovalState } = require('../services/reviewService');
+const { submitReview, getReviewHistory, getApprovalState, getProjectReviews } = require('../services/reviewService');
 
 const router = express.Router();
+
+// GET /review/project/:projectId — all reviews for every post in a project
+router.get('/project/:projectId', async (req, res) => {
+  const { projectId } = req.params;
+  const manager_id = req.headers['x-manager-id'];
+
+  if (!manager_id) return res.status(401).json({ error: 'Missing manager_id' });
+
+  try {
+    const reviews = await getProjectReviews(projectId, manager_id);
+    res.json(reviews);
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
 
 // GET /review/:postId/state — current approval state for a post
 router.get('/:postId/state', async (req, res) => {

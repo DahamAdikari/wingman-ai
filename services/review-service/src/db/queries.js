@@ -77,6 +77,18 @@ async function getReviewsByPost(post_id, manager_id) {
   return rows;
 }
 
+async function getReviewsByProject(project_id, manager_id) {
+  const { rows } = await pool.query(
+    `SELECT r.*
+     FROM reviews r
+     INNER JOIN approval_state a ON a.post_id = r.post_id
+     WHERE a.project_id = $1 AND r.manager_id = $2
+     ORDER BY r.created_at ASC`,
+    [project_id, manager_id]
+  );
+  return rows;
+}
+
 module.exports = {
   upsertApprovalState,
   getApprovalState,
@@ -85,4 +97,5 @@ module.exports = {
   setRejected,
   insertReview,
   getReviewsByPost,
+  getReviewsByProject,
 };
