@@ -84,6 +84,24 @@ services:
       timeout: 5s
       retries: 10
 
+  review-db:
+    image: postgres:15
+    container_name: wingman-review-db
+    restart: always
+    environment:
+      POSTGRES_DB: review_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5435:5432"
+    volumes:
+      - review-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d review_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   # ─── Services ────────────────────────────────────────────────────────────────
   user-service:
     build: ./services/user-service
@@ -135,6 +153,21 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  review-service:
+    build: ./services/review-service
+    container_name: wingman-review-service
+    ports:
+      - "5004:5004"
+    environment:
+      PORT: 5004
+      DATABASE_URL: postgres://postgres:postgres@review-db:5432/review_db
+      RABBITMQ_URL: amqp://admin:password@rabbitmq:5672
+    depends_on:
+      review-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
   api-gateway:
     build: ./services/api-gateway
     container_name: wingman-api-gateway
@@ -152,6 +185,7 @@ services:
       - user-service
       - content-service
       - query-service
+      - review-service
 
   # ─── Frontend ────────────────────────────────────────────────────────────────
   frontend:
@@ -173,3 +207,4 @@ volumes:
   user-db-data:
   content-db-data:
   query-db-data:
+  review-db-data:
