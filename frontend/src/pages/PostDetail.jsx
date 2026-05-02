@@ -48,6 +48,9 @@ export default function PostDetail() {
     loadData().finally(() => setLoading(false));
   }, [loadData]);
 
+  const isClient  = user?.role === 'client' || user?.role === 'viewer';
+  const isManager = !isClient; // manager or team_member
+
   async function submitReview(decision) {
     if (decision !== 'approved' && !feedback.trim()) {
       setSubmitError('Feedback is required when requesting changes.');
@@ -57,8 +60,8 @@ export default function PostDetail() {
     setSubmitting(true);
     try {
       await apiClient.post(`/api/review/${id}`, {
-        reviewer_id:   user.manager_id,
-        reviewer_role: 'manager',
+        reviewer_id:   isClient ? user.user_id : user.manager_id,
+        reviewer_role: isClient ? 'client' : 'manager',
         decision,
         feedback_text: feedback.trim() || null,
       });
@@ -99,7 +102,9 @@ export default function PostDetail() {
   // post.status (from content service) lags by one async event, so use approvalStage for UI decisions.
   const currentStage    = approvalStage ?? post.status;
   const isManagerReview = currentStage === 'manager_review';
+  const isClientReview  = currentStage === 'client_review';
   const isRegenerating  = currentStage === 'rejected';
+  const canReview       = (isManager && isManagerReview) || (isClient && isClientReview);
 
   return (
     <div className="page">
@@ -207,10 +212,12 @@ export default function PostDetail() {
         )}
       </div>
 
-      {/* Review panel — only when post is at manager_review stage */}
-      {isManagerReview && (
+      {/* Review panel — shown to manager at manager_review, or client at client_review */}
+      {canReview && (
         <div className="review-panel">
-          <div className="review-panel-title">Submit Review</div>
+          <div className="review-panel-title">
+            {isClientReview ? 'Client Review' : 'Submit Review'}
+          </div>
           <div className="field">
             <label className="field-label">Feedback</label>
             <textarea

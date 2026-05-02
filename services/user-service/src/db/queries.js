@@ -33,12 +33,29 @@ async function listUsers(manager_id) {
   return rows;
 }
 
-async function createUser({ manager_id, name, email, role }) {
+async function createUser({ manager_id, name, email, role, password_hash = null }) {
   const { rows } = await pool.query(
-    `INSERT INTO users (manager_id, name, email, role)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO users (manager_id, name, email, password_hash, role)
+     VALUES ($1, $2, $3, $4, $5)
      RETURNING id, manager_id, name, email, role, created_at`,
-    [manager_id, name, email, role]
+    [manager_id, name, email, password_hash, role]
+  );
+  return rows[0];
+}
+
+async function findUserByEmail(email) {
+  const { rows } = await pool.query(
+    'SELECT * FROM users WHERE email = $1 LIMIT 1',
+    [email]
+  );
+  return rows[0];
+}
+
+async function updateUserPassword(id, password_hash) {
+  const { rows } = await pool.query(
+    `UPDATE users SET password_hash = $2 WHERE id = $1
+     RETURNING id, manager_id, name, email, role, created_at`,
+    [id, password_hash]
   );
   return rows[0];
 }
@@ -103,6 +120,19 @@ async function updateProject({ id, manager_id, name, description, status }) {
 
 // ─── Project Members ──────────────────────────────────────────────────────────
 
+async function getProjectsForUser(user_id) {
+  const { rows } = await pool.query(
+    `SELECT p.id, p.name, p.description, p.status, p.created_at,
+            pm.role AS member_role, pm.enrolled_at
+     FROM project_members pm
+     JOIN projects p ON p.id = pm.project_id
+     WHERE pm.user_id = $1
+     ORDER BY pm.enrolled_at DESC`,
+    [user_id]
+  );
+  return rows;
+}
+
 async function addProjectMember({ project_id, user_id, manager_id, role }) {
   const { rows } = await pool.query(
     `INSERT INTO project_members (project_id, user_id, manager_id, role)
@@ -118,8 +148,11 @@ module.exports = {
   createManager,
   listUsers,
   createUser,
+  findUserByEmail,
+  updateUserPassword,
   findUserById,
   listUsersForProject,
+  getProjectsForUser,
   listProjects,
   createProject,
   updateProject,

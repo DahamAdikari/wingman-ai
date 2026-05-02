@@ -1,13 +1,16 @@
 {
-  "name": "publisher-service",
+  "name": "notification-service",
   "version": "1.0.0",
   "main": "src/index.js",
-  "scripts": { "start": "node src/index.js", "dev": "nodemon src/index.js" },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js"
+  },
   "dependencies": {
     "express": "^4.19.2",
+    "pg": "^8.11.3",
     "amqplib": "^0.10.4",
     "node-telegram-bot-api": "^0.66.0",
-    "axios": "^1.7.2",
     "dotenv": "^16.4.5"
   }
 }

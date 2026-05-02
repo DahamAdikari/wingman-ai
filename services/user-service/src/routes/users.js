@@ -6,6 +6,19 @@ const router = express.Router();
 // manager_id is injected by the API Gateway as x-manager-id header
 const getManagerId = (req) => req.headers['x-manager-id'];
 
+// GET /users/my-projects — projects the currently logged-in user is enrolled in
+// Uses x-user-id (set by API Gateway from JWT). Works for clients/team members/viewers.
+router.get('/my-projects', async (req, res) => {
+  const user_id = req.headers['x-user-id'];
+  if (!user_id) return res.status(400).json({ error: 'Missing user_id' });
+  try {
+    const projects = await userService.getProjectsForUser(user_id);
+    res.json(projects);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Must be registered before /:id to prevent Express matching "project" as an id
 router.get('/project/:projectId', async (req, res) => {
   try {
