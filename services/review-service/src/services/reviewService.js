@@ -63,12 +63,13 @@ async function submitReview({ post_id, manager_id, reviewer_id, reviewer_role, d
   if (reviewer_role === 'manager') {
     if (decision === 'approved') {
       await queries.setManagerApproved(post_id, manager_id);
-      await publish('MANAGER_APPROVED', basePayload);
+      await publish('MANAGER_APPROVED', { ...basePayload, new_status: 'client_review' });
     } else {
       // 'rejected' or 'changes_requested' — both trigger regeneration
       await queries.setRejected(post_id, manager_id);
       await publish('CONTENT_REJECTED', {
         ...basePayload,
+        new_status: 'rejected',
         rejected_by: 'manager',
         feedback_text: feedback_text || '',
       });
@@ -76,12 +77,13 @@ async function submitReview({ post_id, manager_id, reviewer_id, reviewer_role, d
   } else if (reviewer_role === 'client') {
     if (decision === 'approved') {
       await queries.setClientApproved(post_id, manager_id);
-      await publish('CONTENT_APPROVED', basePayload);
+      await publish('CONTENT_APPROVED', { ...basePayload, new_status: 'approved' });
     } else if (decision === 'changes_requested') {
       // Soft rejection — triggers content regeneration with specific feedback
       await queries.setRejected(post_id, manager_id);
       await publish('CLIENT_FEEDBACK', {
         ...basePayload,
+        new_status: 'rejected',
         client_id: reviewer_id,
         feedback_text: feedback_text || '',
       });
@@ -90,6 +92,7 @@ async function submitReview({ post_id, manager_id, reviewer_id, reviewer_role, d
       await queries.setRejected(post_id, manager_id);
       await publish('CONTENT_REJECTED', {
         ...basePayload,
+        new_status: 'rejected',
         rejected_by: 'client',
         feedback_text: feedback_text || '',
       });

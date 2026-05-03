@@ -26,9 +26,13 @@ export default function Dashboard() {
   const [createError, setCreateError] = useState('');
 
   useWebSocket(({ type, payload }) => {
-    if (type === 'POST_STATUS_UPDATED') {
+    if (type === 'POST_STATUS_UPDATED' && payload.new_status) {
       setProjects((prev) =>
-        prev.map((p) => (p.id === payload.project_id ? { ...p, ...payload } : p))
+        prev.map((p) =>
+          p.id === payload.project_id
+            ? { ...p, last_post_status: payload.new_status }
+            : p
+        )
       );
     }
   });

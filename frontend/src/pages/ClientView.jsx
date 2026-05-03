@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import apiClient from '../api/client';
 import { useAuth } from '../hooks/useAuth';
 import { useWebSocket } from '../hooks/useWebSocket';
@@ -12,38 +12,39 @@ export default function ClientView() {
   const [submitting, setSubmitting] = useState({});
   const [errors, setErrors]     = useState({});
 
-  useWebSocket(({ type, payload }) => {
-    if (type === 'POST_STATUS_UPDATED') {
-      setPosts((prev) =>
-        prev.map((p) => (p.id === payload.post_id ? { ...p, status: payload.status } : p))
+  const load = useCallback(async () => {
+    try {
+      // Step 1: find which projects this client is enrolled in
+      const { data: projects } = await apiClient.get('/api/users/my-projects');
+      if (!projects.length) return;
+
+      // Step 2: fetch posts for all enrolled projects in parallel, keep only client_review ones
+      const results = await Promise.allSettled(
+        projects.map((p) => apiClient.get(`/api/projects/${p.id}/posts`))
       );
+
+      const allPosts = results
+        .filter((r) => r.status === 'fulfilled')
+        .flatMap((r) => (Array.isArray(r.value.data) ? r.value.data : []))
+        .filter((p) => p.status === 'client_review');
+
+      setPosts(allPosts);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Re-fetch when a post status changes — handles both new posts entering client_review
+  // and posts leaving it after manager action
+  useWebSocket(({ type }) => {
+    if (type === 'POST_STATUS_UPDATED') {
+      load();
     }
   });
 
   useEffect(() => {
-    async function load() {
-      try {
-        // Step 1: find which projects this client is enrolled in
-        const { data: projects } = await apiClient.get('/api/users/my-projects');
-        if (!projects.length) return;
-
-        // Step 2: fetch posts for all enrolled projects in parallel, keep only client_review ones
-        const results = await Promise.allSettled(
-          projects.map((p) => apiClient.get(`/api/projects/${p.id}/posts`))
-        );
-
-        const allPosts = results
-          .filter((r) => r.status === 'fulfilled')
-          .flatMap((r) => (Array.isArray(r.value.data) ? r.value.data : []))
-          .filter((p) => p.status === 'client_review');
-
-        setPosts(allPosts);
-      } finally {
-        setLoading(false);
-      }
-    }
     load();
-  }, []);
+  }, [load]);
 
   async function respond(postId, decision) {
     const feedbackText = feedback[postId] || '';

@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import apiClient from '../api/client';
 import StatusBadge from '../components/common/StatusBadge';
 import { useAuth } from '../hooks/useAuth';
+import { useWebSocket } from '../hooks/useWebSocket';
 
 export default function PostDetail() {
   const { id }    = useParams();
@@ -47,6 +48,15 @@ export default function PostDetail() {
     setLoading(true);
     loadData().finally(() => setLoading(false));
   }, [loadData]);
+
+  // When content finishes regenerating the content service emits CONTENT_CREATED,
+  // which the realtime service broadcasts as POST_STATUS_UPDATED. Reload so the
+  // new caption/version appears without requiring a manual page refresh.
+  useWebSocket(({ type, payload }) => {
+    if (type === 'POST_STATUS_UPDATED' && String(payload.post_id) === id) {
+      loadData();
+    }
+  });
 
   const isClient  = user?.role === 'client' || user?.role === 'viewer';
   const isManager = !isClient; // manager or team_member
