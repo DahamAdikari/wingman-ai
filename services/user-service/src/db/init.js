@@ -39,9 +39,11 @@ async function initDB() {
     );
   `);
 
-  // Handle existing tables that may be missing the password_hash column
+  // Handle existing tables that may be missing columns
   await pool.query(`
     ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS invite_token VARCHAR(255);
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS invite_token_expires_at TIMESTAMP;
   `);
 
   console.log('[user-service] Database tables initialized');

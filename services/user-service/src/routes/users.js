@@ -47,6 +47,15 @@ router.post('/', async (req, res) => {
   }
 });
 
+router.post('/:id/invite', async (req, res) => {
+  try {
+    const result = await userService.generateInviteLink(req.params.id, getManagerId(req));
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 router.get('/:id', async (req, res) => {
   try {
     const user = await userService.getUserById(req.params.id, getManagerId(req));

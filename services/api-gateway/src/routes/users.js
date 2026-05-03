@@ -19,6 +19,11 @@ router.post('/', (req, res) => {
   forward(req, res, `${USER_SERVICE}/users`);
 });
 
+// POST /api/users/:id/invite → generate (or regenerate) invite link for a user
+router.post('/:id/invite', (req, res) => {
+  forward(req, res, `${USER_SERVICE}/users/${req.params.id}/invite`);
+});
+
 // GET /api/users/:id → get a single user
 router.get('/:id', (req, res) => {
   forward(req, res, `${USER_SERVICE}/users/${req.params.id}`);

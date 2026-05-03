@@ -24,7 +24,8 @@ async function createManager({ name, email, password_hash }) {
 
 async function listUsers(manager_id) {
   const { rows } = await pool.query(
-    `SELECT id, name, email, role, created_at
+    `SELECT id, name, email, role, created_at,
+            (password_hash IS NOT NULL) AS has_password
      FROM users
      WHERE manager_id = $1
      ORDER BY created_at DESC`,
@@ -58,6 +59,28 @@ async function updateUserPassword(id, password_hash) {
     [id, password_hash]
   );
   return rows[0];
+}
+
+async function saveInviteToken(user_id, token, expires_at) {
+  await pool.query(
+    `UPDATE users SET invite_token = $2, invite_token_expires_at = $3 WHERE id = $1`,
+    [user_id, token, expires_at]
+  );
+}
+
+async function findUserByInviteToken(token) {
+  const { rows } = await pool.query(
+    `SELECT * FROM users WHERE invite_token = $1`,
+    [token]
+  );
+  return rows[0];
+}
+
+async function clearInviteToken(user_id) {
+  await pool.query(
+    `UPDATE users SET invite_token = NULL, invite_token_expires_at = NULL WHERE id = $1`,
+    [user_id]
+  );
 }
 
 async function findUserById(id, manager_id) {
@@ -157,4 +180,7 @@ module.exports = {
   createProject,
   updateProject,
   addProjectMember,
+  saveInviteToken,
+  findUserByInviteToken,
+  clearInviteToken,
 };
