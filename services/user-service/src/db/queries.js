@@ -24,7 +24,8 @@ async function createManager({ name, email, password_hash }) {
 
 async function listUsers(manager_id) {
   const { rows } = await pool.query(
-    `SELECT id, name, email, role, created_at
+    `SELECT id, name, email, role, created_at,
+            (password_hash IS NOT NULL) AS has_password
      FROM users
      WHERE manager_id = $1
      ORDER BY created_at DESC`,
@@ -33,14 +34,53 @@ async function listUsers(manager_id) {
   return rows;
 }
 
-async function createUser({ manager_id, name, email, role }) {
+async function createUser({ manager_id, name, email, role, password_hash = null }) {
   const { rows } = await pool.query(
-    `INSERT INTO users (manager_id, name, email, role)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO users (manager_id, name, email, password_hash, role)
+     VALUES ($1, $2, $3, $4, $5)
      RETURNING id, manager_id, name, email, role, created_at`,
-    [manager_id, name, email, role]
+    [manager_id, name, email, password_hash, role]
   );
   return rows[0];
+}
+
+async function findUserByEmail(email) {
+  const { rows } = await pool.query(
+    'SELECT * FROM users WHERE email = $1 LIMIT 1',
+    [email]
+  );
+  return rows[0];
+}
+
+async function updateUserPassword(id, password_hash) {
+  const { rows } = await pool.query(
+    `UPDATE users SET password_hash = $2 WHERE id = $1
+     RETURNING id, manager_id, name, email, role, created_at`,
+    [id, password_hash]
+  );
+  return rows[0];
+}
+
+async function saveInviteToken(user_id, token, expires_at) {
+  await pool.query(
+    `UPDATE users SET invite_token = $2, invite_token_expires_at = $3 WHERE id = $1`,
+    [user_id, token, expires_at]
+  );
+}
+
+async function findUserByInviteToken(token) {
+  const { rows } = await pool.query(
+    `SELECT * FROM users WHERE invite_token = $1`,
+    [token]
+  );
+  return rows[0];
+}
+
+async function clearInviteToken(user_id) {
+  await pool.query(
+    `UPDATE users SET invite_token = NULL, invite_token_expires_at = NULL WHERE id = $1`,
+    [user_id]
+  );
 }
 
 async function findUserById(id, manager_id) {
@@ -103,6 +143,19 @@ async function updateProject({ id, manager_id, name, description, status }) {
 
 // ─── Project Members ──────────────────────────────────────────────────────────
 
+async function getProjectsForUser(user_id) {
+  const { rows } = await pool.query(
+    `SELECT p.id, p.name, p.description, p.status, p.created_at,
+            pm.role AS member_role, pm.enrolled_at
+     FROM project_members pm
+     JOIN projects p ON p.id = pm.project_id
+     WHERE pm.user_id = $1
+     ORDER BY pm.enrolled_at DESC`,
+    [user_id]
+  );
+  return rows;
+}
+
 async function addProjectMember({ project_id, user_id, manager_id, role }) {
   const { rows } = await pool.query(
     `INSERT INTO project_members (project_id, user_id, manager_id, role)
@@ -118,10 +171,16 @@ module.exports = {
   createManager,
   listUsers,
   createUser,
+  findUserByEmail,
+  updateUserPassword,
   findUserById,
   listUsersForProject,
+  getProjectsForUser,
   listProjects,
   createProject,
   updateProject,
   addProjectMember,
+  saveInviteToken,
+  findUserByInviteToken,
+  clearInviteToken,
 };

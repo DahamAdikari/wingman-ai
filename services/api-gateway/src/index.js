@@ -11,6 +11,8 @@ const projectRoutes = require('./routes/projects');
 const reviewRoutes = require('./routes/review');
 const assetRoutes = require('./routes/assets');
 const userRoutes = require('./routes/users');
+const notificationRoutes = require('./routes/notifications');
+const scheduleRoutes = require('./routes/schedule');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -35,6 +37,8 @@ app.use('/api/projects', projectRoutes);
 app.use('/api/review', reviewRoutes);
 app.use('/api/assets', assetRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/schedule', scheduleRoutes);
 
 // 404 fallback — log unhandled routes so missing routes are visible in gateway logs
 app.use((req, res) => {

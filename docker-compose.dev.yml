@@ -1,13 +1,16 @@
 version: '3.9'
 
-# Dev compose for testing api-gateway + user-service + content-service.
+# Dev compose — runs all implemented services.
 # Run with: docker-compose -f docker-compose.dev.yml up --build
 #
 # Required env vars (create a .env file at the project root or export them):
-#   GEMINI_API_KEY     — Google Gemini API key (caption generation)
-#   OPENAI_API_KEY     — OpenAI API key (caption generation fallback)
-#   AI_IMAGE_API_URL   — Image generation API endpoint (optional; skipped if unset)
-#   AI_IMAGE_API_KEY   — Image generation API key      (optional; skipped if unset)
+#   GEMINI_API_KEY          — Google Gemini API key (caption generation)
+#   OPENAI_API_KEY          — OpenAI API key (caption generation fallback)
+#   AI_IMAGE_API_URL        — Image generation API endpoint (optional)
+#   AI_IMAGE_API_KEY        — Image generation API key (optional)
+#   TELEGRAM_BOT_TOKEN      — Telegram bot token (notifications + publishing)
+#   TELEGRAM_CHAT_ID        — Telegram chat ID for manager notifications
+#   TELEGRAM_CHANNEL_ID     — Telegram channel ID for publishing posts
 
 services:
 
@@ -17,8 +20,8 @@ services:
     container_name: wingman-rabbitmq
     restart: always
     ports:
-      - "5672:5672"     # AMQP
-      - "15672:15672"   # Management UI → http://localhost:15672 (admin / password)
+      - "5672:5672"
+      - "15672:15672"
     environment:
       RABBITMQ_DEFAULT_USER: admin
       RABBITMQ_DEFAULT_PASS: password
@@ -66,6 +69,24 @@ services:
       timeout: 5s
       retries: 10
 
+  review-db:
+    image: postgres:15
+    container_name: wingman-review-db
+    restart: always
+    environment:
+      POSTGRES_DB: review_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5435:5432"
+    volumes:
+      - review-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d review_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   query-db:
     image: postgres:15
     container_name: wingman-query-db
@@ -80,6 +101,42 @@ services:
       - query-db-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d query_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  notif-db:
+    image: postgres:15
+    container_name: wingman-notif-db
+    restart: always
+    environment:
+      POSTGRES_DB: notif_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5438:5432"
+    volumes:
+      - notif-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d notif_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  schedule-db:
+    image: postgres:15
+    container_name: wingman-schedule-db
+    restart: always
+    environment:
+      POSTGRES_DB: schedule_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5439:5432"
+    volumes:
+      - schedule-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d schedule_db"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -120,6 +177,21 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  review-service:
+    build: ./services/review-service
+    container_name: wingman-review-service
+    ports:
+      - "5004:5004"
+    environment:
+      PORT: 5004
+      DATABASE_URL: postgres://postgres:postgres@review-db:5432/review_db
+      RABBITMQ_URL: amqp://admin:password@rabbitmq:5672
+    depends_on:
+      review-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
   query-service:
     build: ./services/query-service
     container_name: wingman-query-service
@@ -132,6 +204,65 @@ services:
     depends_on:
       query-db:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  realtime-service:
+    build: ./services/realtime-service
+    container_name: wingman-realtime-service
+    ports:
+      - "5006:5006"
+    environment:
+      PORT: 5006
+      RABBITMQ_URL: amqp://admin:password@rabbitmq:5672
+      JWT_SECRET: devsecret
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  notification-service:
+    build: ./services/notification-service
+    container_name: wingman-notification-service
+    ports:
+      - "5007:5007"
+    environment:
+      PORT: 5007
+      DATABASE_URL: postgres://postgres:postgres@notif-db:5432/notif_db
+      RABBITMQ_URL: amqp://admin:password@rabbitmq:5672
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+    depends_on:
+      notif-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  scheduler-service:
+    build: ./services/scheduler-service
+    container_name: wingman-scheduler-service
+    ports:
+      - "5008:5008"
+    environment:
+      PORT: 5008
+      DATABASE_URL: postgres://postgres:postgres@schedule-db:5432/schedule_db
+      RABBITMQ_URL: amqp://admin:password@rabbitmq:5672
+    depends_on:
+      schedule-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  publisher-service:
+    build: ./services/publisher-service
+    container_name: wingman-publisher-service
+    ports:
+      - "5009:5009"
+    environment:
+      PORT: 5009
+      RABBITMQ_URL: amqp://admin:password@rabbitmq:5672
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHANNEL_ID: ${TELEGRAM_CHANNEL_ID:-}
+    depends_on:
       rabbitmq:
         condition: service_healthy
 
@@ -148,10 +279,15 @@ services:
       ASSET_SERVICE_URL: http://asset-service:5003
       REVIEW_SERVICE_URL: http://review-service:5004
       QUERY_SERVICE_URL: http://query-service:5005
+      NOTIFICATION_SERVICE_URL: http://notification-service:5007
+      SCHEDULER_SERVICE_URL: http://scheduler-service:5008
     depends_on:
       - user-service
       - content-service
       - query-service
+      - review-service
+      - notification-service
+      - scheduler-service
 
   # ─── Frontend ────────────────────────────────────────────────────────────────
   frontend:
@@ -165,11 +301,15 @@ services:
       VITE_API_URL: http://localhost:4000
       VITE_WS_URL: ws://localhost:5006
     volumes:
-      - ./frontend/src:/app/src       # hot-reload: source changes reflect instantly
+      - ./frontend/src:/app/src
     depends_on:
       - api-gateway
+      - realtime-service
 
 volumes:
   user-db-data:
   content-db-data:
+  review-db-data:
   query-db-data:
+  notif-db-data:
+  schedule-db-data:

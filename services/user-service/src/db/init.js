@@ -15,6 +15,7 @@ async function initDB() {
       manager_id    UUID          REFERENCES managers(id) NOT NULL,
       name          VARCHAR(255)  NOT NULL,
       email         VARCHAR(255)  NOT NULL,
+      password_hash VARCHAR(255),
       role          VARCHAR(50)   NOT NULL,
       created_at    TIMESTAMP     DEFAULT NOW()
     );
@@ -36,6 +37,13 @@ async function initDB() {
       role          VARCHAR(50)   NOT NULL,
       enrolled_at   TIMESTAMP     DEFAULT NOW()
     );
+  `);
+
+  // Handle existing tables that may be missing columns
+  await pool.query(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS invite_token VARCHAR(255);
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS invite_token_expires_at TIMESTAMP;
   `);
 
   console.log('[user-service] Database tables initialized');

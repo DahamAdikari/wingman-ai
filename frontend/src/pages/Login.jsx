@@ -25,7 +25,14 @@ export default function Login() {
     try {
       const { data } = await apiClient.post('/api/auth/login', { email, password });
       login(data.token);
-      navigate('/dashboard');
+      // Route based on role decoded from token
+      const decoded = JSON.parse(atob(data.token.split('.')[1]));
+      const role = decoded.role;
+      if (role === 'client' || role === 'viewer') {
+        navigate('/client');
+      } else {
+        navigate('/dashboard');
+      }
     } catch {
       setError('Invalid email or password');
     } finally {
@@ -60,7 +67,7 @@ export default function Login() {
       <div className="auth-form-panel">
         <div className="auth-form-box">
           <h2 className="auth-form-title">Welcome back</h2>
-          <p className="auth-form-sub">Sign in to your manager account</p>
+          <p className="auth-form-sub">Sign in to your account</p>
 
           <form onSubmit={handleSubmit} className="auth-form">
             <div className="field">

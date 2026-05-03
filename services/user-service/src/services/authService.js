@@ -5,21 +5,63 @@ const db = require('../db/queries');
 async function login({ email, password }) {
   if (!email || !password) throw new Error('Email and password are required');
 
+  // Try manager table first
   const manager = await db.findManagerByEmail(email);
-  if (!manager) throw new Error('Invalid credentials');
+  if (manager) {
+    const valid = await bcrypt.compare(password, manager.password_hash);
+    if (!valid) throw new Error('Invalid credentials');
 
-  const valid = await bcrypt.compare(password, manager.password_hash);
+    const token = jwt.sign(
+      { manager_id: manager.id, role: 'manager' },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    return {
+      token,
+      manager: { id: manager.id, name: manager.name, email: manager.email },
+    };
+  }
+
+  // Fall back to users table
+  const user = await db.findUserByEmail(email);
+  if (!user) throw new Error('Invalid credentials');
+  if (!user.password_hash) throw new Error('Invalid credentials');
+
+  const valid = await bcrypt.compare(password, user.password_hash);
   if (!valid) throw new Error('Invalid credentials');
 
   const token = jwt.sign(
-    { manager_id: manager.id, role: 'manager' },
+    { manager_id: user.manager_id, user_id: user.id, role: user.role },
     process.env.JWT_SECRET,
     { expiresIn: '7d' }
   );
 
   return {
     token,
-    manager: { id: manager.id, name: manager.name, email: manager.email },
+    user: { id: user.id, name: user.name, email: user.email, role: user.role, manager_id: user.manager_id },
+  };
+}
+
+async function loginUser({ email, password }) {
+  if (!email || !password) throw new Error('Email and password are required');
+
+  const user = await db.findUserByEmail(email);
+  if (!user) throw new Error('Invalid credentials');
+  if (!user.password_hash) throw new Error('Invalid credentials');
+
+  const valid = await bcrypt.compare(password, user.password_hash);
+  if (!valid) throw new Error('Invalid credentials');
+
+  const token = jwt.sign(
+    { manager_id: user.manager_id, user_id: user.id, role: user.role },
+    process.env.JWT_SECRET,
+    { expiresIn: '7d' }
+  );
+
+  return {
+    token,
+    user: { id: user.id, name: user.name, email: user.email, role: user.role, manager_id: user.manager_id },
   };
 }
 
@@ -41,4 +83,4 @@ async function register({ name, email, password }) {
   return { token, manager };
 }
 
-module.exports = { login, register };
+module.exports = { login, loginUser, register };

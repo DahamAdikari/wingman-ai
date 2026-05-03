@@ -35,6 +35,7 @@ async function createNewPost({ manager_id, project_id, platform, prompt, image_p
     platform,
     caption_text,
     image_url,
+    new_status: 'manager_review',
   });
 
   return { post: { ...post, status: 'manager_review' }, version };
@@ -74,6 +75,7 @@ async function regenerateContent({ post_id, manager_id, revision_notes }) {
     platform: latestVersion.platform,
     caption_text,
     image_url,
+    new_status: 'manager_review',
   });
 
   return version;

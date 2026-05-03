@@ -4,6 +4,11 @@ const { forward } = require('../proxy/forward');
 const router = express.Router();
 const USER_SERVICE = process.env.USER_SERVICE_URL;
 
+// GET /api/users/my-projects → projects the current user (client/member) is enrolled in
+router.get('/my-projects', (req, res) => {
+  forward(req, res, `${USER_SERVICE}/users/my-projects`);
+});
+
 // GET /api/users → list users under the authenticated manager
 router.get('/', (req, res) => {
   forward(req, res, `${USER_SERVICE}/users`);
@@ -12,6 +17,11 @@ router.get('/', (req, res) => {
 // POST /api/users → create a new user (client, team member, viewer)
 router.post('/', (req, res) => {
   forward(req, res, `${USER_SERVICE}/users`);
+});
+
+// POST /api/users/:id/invite → generate (or regenerate) invite link for a user
+router.post('/:id/invite', (req, res) => {
+  forward(req, res, `${USER_SERVICE}/users/${req.params.id}/invite`);
 });
 
 // GET /api/users/:id → get a single user

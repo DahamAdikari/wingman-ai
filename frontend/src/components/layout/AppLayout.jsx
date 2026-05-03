@@ -3,7 +3,10 @@ import { useAuth } from '../../hooks/useAuth';
 import { ROLES } from '../../utils/roles';
 
 const NAV_BY_ROLE = {
-  [ROLES.MANAGER]:     [{ label: 'Projects', path: '/dashboard', icon: '◈' }],
+  [ROLES.MANAGER]:     [
+    { label: 'Projects', path: '/dashboard', icon: '◈' },
+    { label: 'People',   path: '/people',    icon: '◎' },
+  ],
   [ROLES.TEAM_MEMBER]: [{ label: 'Projects', path: '/dashboard', icon: '◈' }],
   [ROLES.CLIENT]:      [{ label: 'My Posts',  path: '/client',    icon: '◈' }],
 };

@@ -4,6 +4,9 @@ import { useAuthStore } from '../store';
 export function useWebSocket(onMessage) {
   const token = useAuthStore((s) => s.token);
   const wsRef = useRef(null);
+  // Always keep the ref pointing at the latest callback without re-running the effect
+  const onMessageRef = useRef(onMessage);
+  onMessageRef.current = onMessage;
 
   useEffect(() => {
     if (!token) return;
@@ -14,7 +17,7 @@ export function useWebSocket(onMessage) {
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        onMessage(data);
+        onMessageRef.current(data);
       } catch {
         // ignore malformed messages
       }

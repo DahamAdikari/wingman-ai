@@ -3,7 +3,7 @@ const express = require('express');
 const { initializeTables } = require('./db/init');
 const { startConsumer } = require('./events/consumer');
 const { regenerateContent } = require('./services/contentService');
-const { cacheAsset } = require('./db/queries');
+const { cacheAsset, updatePostStatus } = require('./db/queries');
 const contentRoutes = require('./routes/content');
 
 const app = express();
@@ -14,7 +14,7 @@ app.use('/content', contentRoutes);
 
 async function start() {
   await initializeTables();
-  await startConsumer({ regenerateContent, cacheAsset });
+  await startConsumer({ regenerateContent, cacheAsset, updatePostStatus });
   app.listen(5002, () => console.log('Content Service running on port 5002'));
 }
 

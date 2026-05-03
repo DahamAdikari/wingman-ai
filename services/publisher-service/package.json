@@ -1,16 +1,13 @@
 {
   "name": "publisher-service",
   "version": "1.0.0",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
-  "description": "",
+  "main": "src/index.js",
+  "scripts": { "start": "node src/index.js", "dev": "nodemon src/index.js" },
   "dependencies": {
-    "amqplib": "^1.0.3"
+    "express": "^4.19.2",
+    "amqplib": "^0.10.4",
+    "node-telegram-bot-api": "^0.66.0",
+    "axios": "^1.7.2",
+    "dotenv": "^16.4.5"
   }
 }
