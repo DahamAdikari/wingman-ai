@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, useLocation, Link } from 'react-router-dom';
 import apiClient from '../api/client';
 import StatusBadge from '../components/common/StatusBadge';
+import { useWebSocket } from '../hooks/useWebSocket';
 
 // User creation roles (platform-level)
 const USER_ROLES = ['client', 'team_member', 'viewer'];
@@ -206,8 +207,8 @@ export default function ProjectDetail() {
   const [localMembers, setLocalMembers] = useState(null); // optimistic
   const [showAddMember, setShowAddMember] = useState(false);
 
-  useEffect(() => {
-    apiClient
+  const loadDetail = useCallback(() => {
+    return apiClient
       .get(`/api/projects/${id}/detail`)
       .then(({ data }) => {
         setDetail(data);
@@ -217,9 +218,46 @@ export default function ProjectDetail() {
       })
       .catch((err) => {
         setError(err.response?.data?.error || 'Failed to reach the API gateway');
-      })
-      .finally(() => setLoading(false));
+      });
   }, [id]);
+
+  useEffect(() => {
+    loadDetail().finally(() => setLoading(false));
+  }, [loadDetail]);
+
+  // Update post status badges in real-time when review or content events arrive.
+  // If the post isn't in the list yet (brand-new post), re-fetch to add it.
+  useWebSocket(({ type, payload }) => {
+    if (type !== 'POST_STATUS_UPDATED' || String(payload.project_id) !== id) return;
+
+    if (!payload.new_status) return;
+
+    setDetail((prev) => {
+      if (!prev?.content?.available || !Array.isArray(prev.content.data)) return prev;
+
+      const exists = prev.content.data.some((p) => String(p.id) === String(payload.post_id));
+
+      if (!exists) {
+        // New post — re-fetch posts only to add it to the list
+        apiClient.get(`/api/projects/${id}/posts`).then(({ data }) => {
+          setDetail((d) => d ? { ...d, content: { available: true, data } } : d);
+        });
+        return prev;
+      }
+
+      return {
+        ...prev,
+        content: {
+          ...prev.content,
+          data: prev.content.data.map((p) =>
+            String(p.id) === String(payload.post_id)
+              ? { ...p, status: payload.new_status }
+              : p
+          ),
+        },
+      };
+    });
+  });
 
   function handleMemberAdded(newMember) {
     setLocalMembers((prev) => [...(prev || []), newMember]);
