@@ -124,7 +124,7 @@ Accepts an approved post and a target publish datetime. Waits until the schedule
 ---
 
 ### Publisher Service
-Listens for `READY_TO_PUBLISH` and calls the relevant external platform APIs (Instagram, LinkedIn, etc.) to publish the post.
+This service Listens for `READY_TO_PUBLISH` and calls the relevant external platform APIs (Instagram, LinkedIn, etc.) to publish the post.
 
 **Emits:** `POST_PUBLISHED`
 
