@@ -201,10 +201,10 @@ function AddMemberPanel({ projectId, onAdded, onCancel }) {
 export default function ProjectDetail() {
   const { id }    = useParams();
   const { state } = useLocation();
-  const [detail, setDetail]         = useState(null);
-  const [loading, setLoading]       = useState(true);
-  const [error, setError]           = useState('');
-  const [localMembers, setLocalMembers] = useState(null); // optimistic
+  const [detail, setDetail]               = useState(null);
+  const [loading, setLoading]             = useState(true);
+  const [error, setError]                 = useState('');
+  const [localMembers, setLocalMembers]   = useState(null); // optimistic
   const [showAddMember, setShowAddMember] = useState(false);
 
   const loadDetail = useCallback(() => {
@@ -229,7 +229,6 @@ export default function ProjectDetail() {
   // If the post isn't in the list yet (brand-new post), re-fetch to add it.
   useWebSocket(({ type, payload }) => {
     if (type !== 'POST_STATUS_UPDATED' || String(payload.project_id) !== id) return;
-
     if (!payload.new_status) return;
 
     setDetail((prev) => {

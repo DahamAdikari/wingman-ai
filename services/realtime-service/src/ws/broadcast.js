@@ -22,6 +22,7 @@ const EVENT_TYPE_MAP = {
   CONTENT_REJECTED:   'POST_STATUS_UPDATED',
   READY_TO_PUBLISH:   'POST_STATUS_UPDATED',
   POST_PUBLISHED:     'POST_STATUS_UPDATED',
+  SCHEDULE_CONFIRMED: 'POST_STATUS_UPDATED',
   PROJECT_CREATED:    'PROJECT_UPDATED',
 };
 
@@ -33,8 +34,9 @@ const STATUS_MAP = {
   CLIENT_FEEDBACK:  'rejected',
   CONTENT_APPROVED: 'approved',
   CONTENT_REJECTED: 'rejected',
-  READY_TO_PUBLISH: 'scheduled',
-  POST_PUBLISHED:   'published',
+  READY_TO_PUBLISH:   'scheduled',
+  POST_PUBLISHED:     'published',
+  SCHEDULE_CONFIRMED: 'scheduled',
 };
 
 function broadcast(eventName, payload) {

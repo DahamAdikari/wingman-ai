@@ -191,15 +191,8 @@ export default function PostDetail() {
   // approvalStage (review-service) is authoritative during the review loop.
   // post.status (content-service) is authoritative for terminal states — the review-service
   // state machine stops at 'approved' and never advances to 'scheduled' or 'published'.
-  // Additionally: if the scheduler has created a pending schedule (auto-created on CONTENT_APPROVED),
-  // show 'scheduled' immediately rather than waiting for the READY_TO_PUBLISH cron to fire.
-  const terminalStatus    = post.status === 'scheduled' || post.status === 'published';
-  const hasPendingSchedule = schedule?.status === 'pending';
-  const currentStage = terminalStatus
-    ? post.status
-    : hasPendingSchedule && approvalStage === 'approved'
-      ? 'scheduled'
-      : (approvalStage ?? post.status);
+  const terminalStatus = post.status === 'scheduled' || post.status === 'published';
+  const currentStage   = terminalStatus ? post.status : (approvalStage ?? post.status);
   const isManagerReview = currentStage === 'manager_review';
   const isClientReview = currentStage === 'client_review';
   const isRegenerating = currentStage === 'rejected';

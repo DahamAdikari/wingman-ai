@@ -2,7 +2,7 @@ const { connectWithRetry } = require('./connect');
 
 const EXCHANGE = 'wingman.events';
 const QUEUE = 'content-service-queue';
-const BINDINGS = ['CLIENT_FEEDBACK', 'CONTENT_REJECTED', 'ASSET_UPLOADED', 'MANAGER_APPROVED', 'CONTENT_APPROVED', 'READY_TO_PUBLISH', 'POST_PUBLISHED'];
+const BINDINGS = ['CLIENT_FEEDBACK', 'CONTENT_REJECTED', 'ASSET_UPLOADED', 'MANAGER_APPROVED', 'CONTENT_APPROVED', 'SCHEDULE_CONFIRMED', 'READY_TO_PUBLISH', 'POST_PUBLISHED'];
 
 // Handlers are injected from index.js to avoid circular dependencies at module load time.
 async function startConsumer({ regenerateContent, cacheAsset, updatePostStatus }) {
@@ -31,6 +31,8 @@ async function startConsumer({ regenerateContent, cacheAsset, updatePostStatus }
         await updatePostStatus(payload.post_id, payload.manager_id, 'client_review');
       } else if (payload.event === 'CONTENT_APPROVED') {
         await updatePostStatus(payload.post_id, payload.manager_id, 'approved');
+      } else if (payload.event === 'SCHEDULE_CONFIRMED') {
+        await updatePostStatus(payload.post_id, payload.manager_id, 'scheduled');
       } else if (payload.event === 'READY_TO_PUBLISH') {
         await updatePostStatus(payload.post_id, payload.manager_id, 'scheduled');
       } else if (payload.event === 'POST_PUBLISHED') {

@@ -61,4 +61,15 @@ async function markAsFired(id) {
   );
 }
 
-module.exports = { upsertSchedule, getSchedule, updateScheduledAt, cancelSchedule, getDueSchedules, markAsFired };
+// Returns all pending schedules for a project — used by the frontend to show
+// 'scheduled' status on posts that are approved but not yet fired.
+async function getPendingSchedulesByProject(project_id, manager_id) {
+  const { rows } = await pool.query(
+    `SELECT post_id, scheduled_at FROM scheduled_posts
+     WHERE project_id = $1 AND manager_id = $2 AND status = 'pending'`,
+    [project_id, manager_id]
+  );
+  return rows;
+}
+
+module.exports = { upsertSchedule, getSchedule, updateScheduledAt, cancelSchedule, getDueSchedules, markAsFired, getPendingSchedulesByProject };
