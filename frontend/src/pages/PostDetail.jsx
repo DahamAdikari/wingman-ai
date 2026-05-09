@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import apiClient from '../api/client';
 import StatusBadge from '../components/common/StatusBadge';
@@ -27,13 +27,21 @@ export default function PostDetail() {
   const [scheduleSuccess, setScheduleSuccess] = useState('');
   const [countdown, setCountdown] = useState('');
 
+  // Tracks the latest loadData call so stale in-flight responses are discarded.
+  const loadIdRef = useRef(0);
+
   const loadData = useCallback(async () => {
+    const callId = ++loadIdRef.current;
+
     const [contentRes, reviewRes, stateRes, scheduleRes] = await Promise.allSettled([
       apiClient.get(`/api/content/${id}`),
       apiClient.get(`/api/review/${id}`),
       apiClient.get(`/api/review/${id}/state`),
       apiClient.get(`/api/schedule/${id}`),
     ]);
+
+    // A newer loadData() call has already resolved — discard these stale results.
+    if (callId !== loadIdRef.current) return;
 
     if (contentRes.status === 'fulfilled') {
       const rows = contentRes.value.data;
@@ -180,13 +188,18 @@ export default function PostDetail() {
     );
   }
 
-  // approvalStage comes from the review service and is authoritative for review decisions
-  // (manager_review → client_review → approved → rejected).
-  // post.status (from content service) is authoritative for terminal states: once a post is
-  // scheduled or published the review-service state machine stops at 'approved' and never advances.
-  const terminalStatus = post.status === 'scheduled' || post.status === 'published';
-  console.log("Post: ", post);
-  const currentStage = terminalStatus ? post.status : (approvalStage ?? post.status);
+  // approvalStage (review-service) is authoritative during the review loop.
+  // post.status (content-service) is authoritative for terminal states — the review-service
+  // state machine stops at 'approved' and never advances to 'scheduled' or 'published'.
+  // Additionally: if the scheduler has created a pending schedule (auto-created on CONTENT_APPROVED),
+  // show 'scheduled' immediately rather than waiting for the READY_TO_PUBLISH cron to fire.
+  const terminalStatus    = post.status === 'scheduled' || post.status === 'published';
+  const hasPendingSchedule = schedule?.status === 'pending';
+  const currentStage = terminalStatus
+    ? post.status
+    : hasPendingSchedule && approvalStage === 'approved'
+      ? 'scheduled'
+      : (approvalStage ?? post.status);
   const isManagerReview = currentStage === 'manager_review';
   const isClientReview = currentStage === 'client_review';
   const isRegenerating = currentStage === 'rejected';
