@@ -52,6 +52,7 @@ export default function CreatePost() {
               <option value="instagram">Instagram</option>
               <option value="linkedin">LinkedIn</option>
               <option value="twitter">Twitter / X</option>
+              <option value="telegram">Telegram</option>
             </select>
           </div>
 

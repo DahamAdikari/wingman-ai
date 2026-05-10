@@ -2,18 +2,21 @@ const pool = require('./pool');
 
 // Called when CONTENT_CREATED is received — establishes the approval state for a new post version.
 // Uses upsert: if the post already has a state (re-generation), reset it to manager_review.
-async function upsertApprovalState({ post_id, project_id, manager_id, post_version_id }) {
+async function upsertApprovalState({ post_id, project_id, manager_id, post_version_id, platform, caption_text, image_url }) {
   const { rows } = await pool.query(
-    `INSERT INTO approval_state (post_id, project_id, manager_id, post_version_id, current_stage, manager_approved, client_approved, updated_at)
-     VALUES ($1, $2, $3, $4, 'manager_review', FALSE, FALSE, NOW())
+    `INSERT INTO approval_state (post_id, project_id, manager_id, post_version_id, current_stage, manager_approved, client_approved, platform, caption_text, image_url, updated_at)
+     VALUES ($1, $2, $3, $4, 'manager_review', FALSE, FALSE, $5, $6, $7, NOW())
      ON CONFLICT (post_id) DO UPDATE SET
        post_version_id  = EXCLUDED.post_version_id,
        current_stage    = 'manager_review',
        manager_approved = FALSE,
        client_approved  = FALSE,
+       platform         = EXCLUDED.platform,
+       caption_text     = EXCLUDED.caption_text,
+       image_url        = EXCLUDED.image_url,
        updated_at       = NOW()
      RETURNING *`,
-    [post_id, project_id, manager_id, post_version_id]
+    [post_id, project_id, manager_id, post_version_id, platform || null, caption_text || null, image_url || null]
   );
   return rows[0];
 }
