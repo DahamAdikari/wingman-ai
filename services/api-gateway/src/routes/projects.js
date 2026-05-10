@@ -23,6 +23,26 @@ router.post('/:id/members', (req, res) => {
   forward(req, res, `${USER_SERVICE}/projects/${req.params.id}/members`);
 });
 
+// GET /api/projects/:id/channels → list connected channels for a project
+router.get('/:id/channels', (req, res) => {
+  forward(req, res, `${USER_SERVICE}/projects/${req.params.id}/channels`);
+});
+
+// POST /api/projects/:id/channels → connect / update a channel
+router.post('/:id/channels', (req, res) => {
+  forward(req, res, `${USER_SERVICE}/projects/${req.params.id}/channels`);
+});
+
+// DELETE /api/projects/:id/channels/:platform → disconnect a channel
+router.delete('/:id/channels/:platform', (req, res) => {
+  forward(req, res, `${USER_SERVICE}/projects/${req.params.id}/channels/${req.params.platform}`);
+});
+
+// POST /api/projects/:id/channels/telegram/test → send a test message to verify connection
+router.post('/:id/channels/telegram/test', (req, res) => {
+  forward(req, res, `${USER_SERVICE}/projects/${req.params.id}/channels/telegram/test`);
+});
+
 // GET /api/projects → dashboard list (fast read from query_db)
 router.get('/', (req, res) => {
   forward(req, res, `${QUERY_SERVICE}/query/projects`);

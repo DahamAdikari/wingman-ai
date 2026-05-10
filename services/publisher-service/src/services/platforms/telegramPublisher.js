@@ -1,35 +1,33 @@
 const TelegramBot = require('node-telegram-bot-api');
 
-let bot = null;
+// Cache bot instances by token to avoid creating duplicates
+const botCache = new Map();
 
-function getBot() {
-  if (!bot && process.env.TELEGRAM_BOT_TOKEN) {
-    bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN);
+function getBot(token) {
+  if (!botCache.has(token)) {
+    botCache.set(token, new TelegramBot(token));
   }
-  return bot;
+  return botCache.get(token);
 }
 
-async function publish({ post_id, caption_text, image_url }) {
-  const telegramBot = getBot();
-  const channelId = process.env.TELEGRAM_CHANNEL_ID;
-
-  if (!telegramBot || !channelId) {
-    console.log('[publisher-service] Telegram not configured, simulating publish');
+async function publish({ post_id, caption_text, image_url, bot_token, channel_id }) {
+  if (!bot_token || !channel_id) {
+    console.log('[publisher-service] Telegram not configured for project, simulating publish');
     return { external_post_id: `telegram_mock_${Date.now()}` };
   }
+
+  const telegramBot = getBot(bot_token);
 
   try {
     let result;
 
     if (image_url) {
-      // Send photo with caption
-      result = await telegramBot.sendPhoto(channelId, image_url, {
+      result = await telegramBot.sendPhoto(channel_id, image_url, {
         caption: caption_text || '',
         parse_mode: 'HTML',
       });
     } else {
-      // Send text message
-      result = await telegramBot.sendMessage(channelId, caption_text || '', {
+      result = await telegramBot.sendMessage(channel_id, caption_text || '', {
         parse_mode: 'HTML',
       });
     }
@@ -40,7 +38,6 @@ async function publish({ post_id, caption_text, image_url }) {
 
   } catch (err) {
     console.error('[publisher-service] Telegram publish error:', err.message);
-    // Return mock on error instead of crashing — let POST_PUBLISHED still fire
     return { external_post_id: `telegram_error_${Date.now()}` };
   }
 }

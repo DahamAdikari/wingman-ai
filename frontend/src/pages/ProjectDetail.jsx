@@ -4,6 +4,243 @@ import apiClient from '../api/client';
 import StatusBadge from '../components/common/StatusBadge';
 import { useWebSocket } from '../hooks/useWebSocket';
 
+const PLATFORM_META = {
+  telegram: {
+    label: 'Telegram',
+    icon: '✈',
+    fields: [
+      { key: 'bot_token',    label: 'Bot Token',    placeholder: '1234567890:AAF...', type: 'password', help: 'From @BotFather on Telegram' },
+      { key: 'channel_id',  label: 'Channel ID',   placeholder: '@mychannel or -1001234567890', type: 'text',     help: 'Bot must be admin of the channel' },
+      { key: 'channel_name', label: 'Display Name', placeholder: 'My Channel', type: 'text', help: 'Label shown in the dashboard' },
+    ],
+  },
+  instagram: {
+    label: 'Instagram',
+    icon: '📷',
+    fields: [
+      { key: 'access_token', label: 'Access Token',  placeholder: 'EAABs...', type: 'password', help: 'Long-lived token from Meta Graph API' },
+      { key: 'account_id',  label: 'Account ID',    placeholder: '17841400...', type: 'text',     help: 'Instagram Business/Creator account ID' },
+      { key: 'account_name', label: 'Display Name', placeholder: '@mybusiness', type: 'text', help: 'Label shown in the dashboard' },
+    ],
+  },
+};
+
+function ChannelConnectForm({ platform, onSave, onCancel }) {
+  const meta = PLATFORM_META[platform];
+  const [values, setValues] = useState({});
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  function set(key, val) {
+    setValues((prev) => ({ ...prev, [key]: val }));
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError('');
+    setSubmitting(true);
+    try {
+      await onSave({ platform, ...values });
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to save channel');
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} style={{ marginTop: 12, padding: '16px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+      <div style={{ display: 'grid', gap: 12, gridTemplateColumns: '1fr 1fr' }}>
+        {meta.fields.map((f) => (
+          <div key={f.key} className="field" style={f.key.includes('token') ? { gridColumn: '1 / -1' } : {}}>
+            <label className="field-label">{f.label}</label>
+            <input
+              type={f.type}
+              className="field-input"
+              placeholder={f.placeholder}
+              value={values[f.key] || ''}
+              onChange={(e) => set(f.key, e.target.value)}
+              required={f.key !== 'channel_name' && f.key !== 'account_name'}
+            />
+            <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3, display: 'block' }}>{f.help}</span>
+          </div>
+        ))}
+      </div>
+      {error && <div className="form-error" style={{ marginTop: 10 }}>{error}</div>}
+      <div style={{ display: 'flex', gap: 8, marginTop: 14, justifyContent: 'flex-end' }}>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={onCancel}>Cancel</button>
+        <button type="submit" className="btn btn-primary btn-sm" disabled={submitting}>
+          {submitting ? <><span className="spinner" />Saving…</> : 'Connect'}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function ChannelsSection({ projectId }) {
+  const [channels, setChannels] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [connecting, setConnecting] = useState(null); // platform key being connected
+  const [disconnecting, setDisconnecting] = useState(null);
+  const [testResults, setTestResults] = useState({}); // { [platform]: { state: 'ok'|'error'|'testing', message } }
+
+  useEffect(() => {
+    apiClient.get(`/api/projects/${projectId}/channels`)
+      .then(({ data }) => setChannels(Array.isArray(data) ? data : []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [projectId]);
+
+  const connectedPlatforms = new Set(channels.map((c) => c.platform));
+
+  async function handleSave(channelData) {
+    const { data } = await apiClient.post(`/api/projects/${projectId}/channels`, channelData);
+    setChannels((prev) => {
+      const existing = prev.findIndex((c) => c.platform === data.platform);
+      if (existing >= 0) {
+        const next = [...prev];
+        next[existing] = data;
+        return next;
+      }
+      return [...prev, data];
+    });
+    setConnecting(null);
+  }
+
+  async function handleTest(platform) {
+    setTestResults((prev) => ({ ...prev, [platform]: { state: 'testing' } }));
+    try {
+      await apiClient.post(`/api/projects/${projectId}/channels/${platform}/test`);
+      setTestResults((prev) => ({ ...prev, [platform]: { state: 'ok', message: 'Test message sent successfully!' } }));
+    } catch (err) {
+      const msg = err.response?.data?.error || 'Test failed — check credentials';
+      setTestResults((prev) => ({ ...prev, [platform]: { state: 'error', message: msg } }));
+    }
+    setTimeout(() => setTestResults((prev) => ({ ...prev, [platform]: null })), 6000);
+  }
+
+  async function handleDisconnect(platform) {
+    setDisconnecting(platform);
+    try {
+      await apiClient.delete(`/api/projects/${projectId}/channels/${platform}`);
+      setChannels((prev) => prev.filter((c) => c.platform !== platform));
+    } catch {
+      // ignore
+    } finally {
+      setDisconnecting(null);
+    }
+  }
+
+  return (
+    <div className="section">
+      <div className="section-header">
+        <span className="section-title">Publishing Channels</span>
+      </div>
+
+      {loading ? (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+          <span className="spinner spinner-light" style={{ width: 13, height: 13 }} />
+          Loading channels…
+        </div>
+      ) : (
+        <>
+          {/* Connected channels */}
+          {channels.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+              {channels.map((ch) => {
+                const meta = PLATFORM_META[ch.platform];
+                const displayName = ch.channel_name || ch.account_name || ch.platform;
+                const testResult = testResults[ch.platform];
+                const isTesting = testResult?.state === 'testing';
+                return (
+                  <div key={ch.platform}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: 'var(--bg-elevated)', borderRadius: testResult ? 'var(--radius-sm) var(--radius-sm) 0 0' : 'var(--radius-sm)', border: '1px solid var(--border)', borderBottom: testResult ? 'none' : undefined }}>
+                      <span style={{ fontSize: 18, lineHeight: 1 }}>{meta?.icon}</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontFamily: 'var(--font-display)', fontSize: 13, color: 'var(--text-primary)', fontWeight: 600 }}>{meta?.label || ch.platform}</div>
+                        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{displayName}</div>
+                      </div>
+                      <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: 'rgba(200,255,0,0.1)', color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>connected</span>
+                      {ch.platform === 'telegram' && (
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          style={{ fontSize: 11, padding: '3px 10px' }}
+                          onClick={() => handleTest(ch.platform)}
+                          disabled={isTesting}
+                        >
+                          {isTesting ? <><span className="spinner" style={{ width: 10, height: 10 }} />Testing…</> : 'Test'}
+                        </button>
+                      )}
+                      <button
+                        className="btn btn-secondary btn-sm"
+                        style={{ fontSize: 11, padding: '3px 10px' }}
+                        onClick={() => connecting === ch.platform ? setConnecting(null) : setConnecting(ch.platform)}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="btn btn-secondary btn-sm"
+                        style={{ fontSize: 11, padding: '3px 10px', color: '#ff6b6b', borderColor: 'rgba(255,107,107,0.3)' }}
+                        onClick={() => handleDisconnect(ch.platform)}
+                        disabled={disconnecting === ch.platform}
+                      >
+                        {disconnecting === ch.platform ? <span className="spinner" style={{ width: 10, height: 10 }} /> : 'Disconnect'}
+                      </button>
+                    </div>
+                    {testResult && testResult.state !== 'testing' && (
+                      <div style={{
+                        padding: '8px 14px',
+                        borderRadius: '0 0 var(--radius-sm) var(--radius-sm)',
+                        border: '1px solid var(--border)',
+                        borderTop: 'none',
+                        background: testResult.state === 'ok' ? 'rgba(200,255,0,0.06)' : 'rgba(255,107,107,0.06)',
+                        color: testResult.state === 'ok' ? 'var(--accent)' : '#ff6b6b',
+                        fontSize: 12,
+                        fontFamily: 'var(--font-mono)',
+                      }}>
+                        {testResult.state === 'ok' ? '✓ ' : '✗ '}{testResult.message}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Connect form for editing existing or adding new */}
+          {connecting && (
+            <ChannelConnectForm
+              platform={connecting}
+              onSave={handleSave}
+              onCancel={() => setConnecting(null)}
+            />
+          )}
+
+          {/* Add new channel buttons */}
+          {!connecting && (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {Object.entries(PLATFORM_META).map(([key, meta]) => (
+                !connectedPlatforms.has(key) && (
+                  <button
+                    key={key}
+                    className="btn btn-secondary btn-sm"
+                    style={{ fontSize: 12, gap: 6, display: 'flex', alignItems: 'center' }}
+                    onClick={() => setConnecting(key)}
+                  >
+                    <span>{meta.icon}</span> Connect {meta.label}
+                  </button>
+                )
+              ))}
+              {connectedPlatforms.size === Object.keys(PLATFORM_META).length && (
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>All channels connected.</span>
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 // User creation roles (platform-level)
 const USER_ROLES = ['client', 'team_member', 'viewer'];
 // Project membership roles (project-level)
@@ -374,6 +611,9 @@ export default function ProjectDetail() {
           </div>
         )}
       </div>
+
+      {/* Publishing Channels */}
+      <ChannelsSection projectId={id} />
 
       {/* Members */}
       <div className="section">

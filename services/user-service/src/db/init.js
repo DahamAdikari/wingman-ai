@@ -39,6 +39,27 @@ async function initDB() {
     );
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS project_channels (
+      id           UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+      project_id   UUID          REFERENCES projects(id) NOT NULL,
+      manager_id   UUID          REFERENCES managers(id) NOT NULL,
+      platform     VARCHAR(100)  NOT NULL,
+      is_enabled   BOOLEAN       DEFAULT true,
+      -- Telegram
+      bot_token    TEXT,
+      channel_id   VARCHAR(255),
+      channel_name VARCHAR(255),
+      -- Instagram (Meta Graph API)
+      access_token TEXT,
+      account_id   VARCHAR(255),
+      account_name VARCHAR(255),
+      connected_at TIMESTAMP     DEFAULT NOW(),
+      updated_at   TIMESTAMP     DEFAULT NOW(),
+      UNIQUE(project_id, platform)
+    );
+  `);
+
   // Handle existing tables that may be missing columns
   await pool.query(`
     ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);

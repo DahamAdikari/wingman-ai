@@ -1,4 +1,16 @@
 require('dotenv').config();
+
+// Docker bridge networks advertise AAAA records but have no IPv6 routing.
+// Patching dns.lookup to always request IPv4 before any module uses it,
+// so https.request (and node-telegram-bot-api) never try the unreachable IPv6 address.
+const dns = require('dns');
+const _origLookup = dns.lookup.bind(dns);
+dns.lookup = function forcedIPv4Lookup(hostname, optionsOrCb, maybeCb) {
+  if (typeof optionsOrCb === 'function') {
+    return _origLookup(hostname, { family: 4 }, optionsOrCb);
+  }
+  return _origLookup(hostname, { ...(optionsOrCb || {}), family: 4 }, maybeCb);
+};
 const express = require('express');
 const { startConsumer } = require('./events/consumer');
 
