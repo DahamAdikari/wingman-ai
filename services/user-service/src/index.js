@@ -16,6 +16,7 @@ const cors = require('cors');
 const morgan = require('morgan');
 const initDB = require('./db/init');
 const publisher = require('./events/publisher');
+const { registerService, deregisterService } = require('./consulClient');
 
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
@@ -48,12 +49,21 @@ app.get('/internal/channels/:project_id/:platform', async (req, res) => {
 
 app.use((req, res) => res.status(404).json({ error: 'Route not found' }));
 
-initDB()
-  .then(() => publisher.connect())
-  .then(() => {
-    app.listen(PORT, () => console.log(`[user-service] Running on port ${PORT}`));
-  })
-  .catch((err) => {
-    console.error('[user-service] Failed to start:', err);
-    process.exit(1);
+process.on('SIGTERM', async () => {
+  await deregisterService();
+  process.exit(0);
+});
+
+async function start() {
+  await initDB();
+  await publisher.connect();
+  app.listen(PORT, async () => {
+    console.log(`[user-service] Running on port ${PORT}`);
+    await registerService();
   });
+}
+
+start().catch((err) => {
+  console.error('[user-service] Failed to start:', err);
+  process.exit(1);
+});

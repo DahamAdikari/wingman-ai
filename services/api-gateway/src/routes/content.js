@@ -1,17 +1,29 @@
 const express = require('express');
 const { forward } = require('../proxy/forward');
+const { getServiceUrl } = require('../serviceRegistry');
 
 const router = express.Router();
-const CONTENT_SERVICE = process.env.CONTENT_SERVICE_URL;
 
 // POST /api/content → create a new post / trigger AI generation
-router.post('/', (req, res) => {
-  forward(req, res, `${CONTENT_SERVICE}/content`);
+router.post('/', async (req, res) => {
+  try {
+    const base = await getServiceUrl('content-service');
+    forward(req, res, `${base}/content`);
+  } catch (err) {
+    console.error('[gateway] Service discovery failed:', err.message);
+    res.status(503).json({ error: 'Service unavailable' });
+  }
 });
 
 // GET /api/content/:id → fetch a single post with its latest version
-router.get('/:id', (req, res) => {
-  forward(req, res, `${CONTENT_SERVICE}/content/${req.params.id}`);
+router.get('/:id', async (req, res) => {
+  try {
+    const base = await getServiceUrl('content-service');
+    forward(req, res, `${base}/content/${req.params.id}`);
+  } catch (err) {
+    console.error('[gateway] Service discovery failed:', err.message);
+    res.status(503).json({ error: 'Service unavailable' });
+  }
 });
 
 module.exports = router;

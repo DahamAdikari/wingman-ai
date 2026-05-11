@@ -13,15 +13,24 @@ dns.lookup = function forcedIPv4Lookup(hostname, optionsOrCb, maybeCb) {
 };
 const express = require('express');
 const { startConsumer } = require('./events/consumer');
+const { registerService, deregisterService } = require('./consulClient');
 
 const app = express();
 const PORT = process.env.PORT || 5009;
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
+process.on('SIGTERM', async () => {
+  await deregisterService();
+  process.exit(0);
+});
+
 async function start() {
   await startConsumer();
-  app.listen(PORT, () => console.log(`[publisher-service] Running on port ${PORT}`));
+  app.listen(PORT, async () => {
+    console.log(`[publisher-service] Running on port ${PORT}`);
+    await registerService();
+  });
 }
 
 start().catch(err => { console.error(err); process.exit(1); });

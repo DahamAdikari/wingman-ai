@@ -5,6 +5,7 @@ const { initDB }           = require('./db/init');
 const { startConsumer }    = require('./events/consumer');
 const { initBot }          = require('./services/telegramService');
 const notificationRoutes   = require('./routes/notifications');
+const { registerService, deregisterService } = require('./consulClient');
 
 const app  = express();
 const PORT = process.env.PORT || 5007;
@@ -19,6 +20,11 @@ app.get('/health', (req, res) => {
 // Notification REST API
 app.use('/notifications', notificationRoutes);
 
+process.on('SIGTERM', async () => {
+  await deregisterService();
+  process.exit(0);
+});
+
 async function bootstrap() {
   try {
     // 1. Initialise database schema
@@ -31,8 +37,9 @@ async function bootstrap() {
     await startConsumer();
 
     // 4. Start HTTP server
-    app.listen(PORT, () => {
+    app.listen(PORT, async () => {
       console.log(`[notification-service] HTTP server listening on port ${PORT}`);
+      await registerService();
     });
   } catch (err) {
     console.error('[notification-service] Failed to start:', err);

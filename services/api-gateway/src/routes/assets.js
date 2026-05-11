@@ -1,22 +1,40 @@
 const express = require('express');
 const { forward } = require('../proxy/forward');
+const { getServiceUrl } = require('../serviceRegistry');
 
 const router = express.Router();
-const ASSET_SERVICE = process.env.ASSET_SERVICE_URL;
 
 // GET /api/assets → list assets for the authenticated manager
-router.get('/', (req, res) => {
-  forward(req, res, `${ASSET_SERVICE}/assets`);
+router.get('/', async (req, res) => {
+  try {
+    const base = await getServiceUrl('asset-service');
+    forward(req, res, `${base}/assets`);
+  } catch (err) {
+    console.error('[gateway] Service discovery failed:', err.message);
+    res.status(503).json({ error: 'Service unavailable' });
+  }
 });
 
 // POST /api/assets → upload a new asset (logo, template, prompt)
-router.post('/', (req, res) => {
-  forward(req, res, `${ASSET_SERVICE}/assets`);
+router.post('/', async (req, res) => {
+  try {
+    const base = await getServiceUrl('asset-service');
+    forward(req, res, `${base}/assets`);
+  } catch (err) {
+    console.error('[gateway] Service discovery failed:', err.message);
+    res.status(503).json({ error: 'Service unavailable' });
+  }
 });
 
 // DELETE /api/assets/:id → remove an asset
-router.delete('/:id', (req, res) => {
-  forward(req, res, `${ASSET_SERVICE}/assets/${req.params.id}`);
+router.delete('/:id', async (req, res) => {
+  try {
+    const base = await getServiceUrl('asset-service');
+    forward(req, res, `${base}/assets/${req.params.id}`);
+  } catch (err) {
+    console.error('[gateway] Service discovery failed:', err.message);
+    res.status(503).json({ error: 'Service unavailable' });
+  }
 });
 
 module.exports = router;
