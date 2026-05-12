@@ -19,7 +19,6 @@ async function registerService() {
       Check: {
         HTTP: `http://${SERVICE_NAME}:${SERVICE_PORT}/health`,
         Interval: '10s',
-        DeregisterCriticalServiceAfter: '30s',
       },
     }),
   });
