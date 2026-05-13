@@ -3,6 +3,8 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
+const swaggerUi = require('swagger-ui-express');
+const swaggerSpec = require('./swagger');
 
 const authMiddleware = require('./middleware/auth');
 const authRoutes = require('./routes/auth');
@@ -16,6 +18,9 @@ const scheduleRoutes = require('./routes/schedule');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
+
+// Swagger UI — mounted before helmet so CSP headers don't block its inline scripts
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 app.use(helmet());
 app.use(cors());
