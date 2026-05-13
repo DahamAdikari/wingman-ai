@@ -6,6 +6,7 @@ const {
   onClientFeedback,
   onContentApproved,
   onContentRejected,
+  onReadyToPublish,
   onPostPublished,
 } = require('../db/queries');
 
@@ -18,6 +19,7 @@ const BINDINGS = [
   'CLIENT_FEEDBACK',
   'CONTENT_APPROVED',
   'CONTENT_REJECTED',
+  'READY_TO_PUBLISH',
   'POST_PUBLISHED',
 ];
 
@@ -55,6 +57,9 @@ async function startConsumer() {
           break;
         case 'CONTENT_REJECTED':
           await onContentRejected(payload);
+          break;
+        case 'READY_TO_PUBLISH':
+          await onReadyToPublish(payload);
           break;
         case 'POST_PUBLISHED':
           await onPostPublished(payload);

@@ -6,9 +6,12 @@ async function upsertSchedule({ post_id, post_version_id, project_id, manager_id
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
     ON CONFLICT (post_id) DO UPDATE SET
       post_version_id = EXCLUDED.post_version_id,
-      scheduled_at = EXCLUDED.scheduled_at,
-      status = 'pending',
-      updated_at = NOW()
+      platform        = EXCLUDED.platform,
+      caption_text    = EXCLUDED.caption_text,
+      image_url       = EXCLUDED.image_url,
+      scheduled_at    = EXCLUDED.scheduled_at,
+      status          = 'pending',
+      updated_at      = NOW()
     RETURNING *`,
     [post_id, post_version_id, project_id, manager_id, platform, caption_text, image_url, scheduled_at]
   );
@@ -61,4 +64,15 @@ async function markAsFired(id) {
   );
 }
 
-module.exports = { upsertSchedule, getSchedule, updateScheduledAt, cancelSchedule, getDueSchedules, markAsFired };
+// Returns all pending schedules for a project — used by the frontend to show
+// 'scheduled' status on posts that are approved but not yet fired.
+async function getPendingSchedulesByProject(project_id, manager_id) {
+  const { rows } = await pool.query(
+    `SELECT post_id, scheduled_at FROM scheduled_posts
+     WHERE project_id = $1 AND manager_id = $2 AND status = 'pending'`,
+    [project_id, manager_id]
+  );
+  return rows;
+}
+
+module.exports = { upsertSchedule, getSchedule, updateScheduledAt, cancelSchedule, getDueSchedules, markAsFired, getPendingSchedulesByProject };

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import apiClient from '../api/client';
 import StatusBadge from '../components/common/StatusBadge';
@@ -6,25 +6,42 @@ import { useAuth } from '../hooks/useAuth';
 import { useWebSocket } from '../hooks/useWebSocket';
 
 export default function PostDetail() {
-  const { id }    = useParams();
-  const navigate  = useNavigate();
-  const { user }  = useAuth();
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const { user } = useAuth();
 
-  const [post, setPost]             = useState(null);   // latest row (post meta + version)
-  const [versions, setVersions]     = useState([]);
-  const [reviews, setReviews]       = useState([]);
+  const [post, setPost] = useState(null);   // latest row (post meta + version)
+  const [versions, setVersions] = useState([]);
+  const [reviews, setReviews] = useState([]);
   const [approvalStage, setApprovalStage] = useState(null); // from review service — always in sync
-  const [loading, setLoading]       = useState(true);
-  const [feedback, setFeedback]     = useState('');
+  const [loading, setLoading] = useState(true);
+  const [feedback, setFeedback] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
 
+  // Schedule state
+  const [schedule, setSchedule] = useState(null);
+  const [scheduleAt, setScheduleAt] = useState('');
+  const [scheduleSubmitting, setScheduleSubmitting] = useState(false);
+  const [scheduleError, setScheduleError] = useState('');
+  const [scheduleSuccess, setScheduleSuccess] = useState('');
+  const [countdown, setCountdown] = useState('');
+
+  // Tracks the latest loadData call so stale in-flight responses are discarded.
+  const loadIdRef = useRef(0);
+
   const loadData = useCallback(async () => {
-    const [contentRes, reviewRes, stateRes] = await Promise.allSettled([
+    const callId = ++loadIdRef.current;
+
+    const [contentRes, reviewRes, stateRes, scheduleRes] = await Promise.allSettled([
       apiClient.get(`/api/content/${id}`),
       apiClient.get(`/api/review/${id}`),
       apiClient.get(`/api/review/${id}/state`),
+      apiClient.get(`/api/schedule/${id}`),
     ]);
+
+    // A newer loadData() call has already resolved — discard these stale results.
+    if (callId !== loadIdRef.current) return;
 
     if (contentRes.status === 'fulfilled') {
       const rows = contentRes.value.data;
@@ -42,6 +59,21 @@ export default function PostDetail() {
     if (stateRes.status === 'fulfilled') {
       setApprovalStage(stateRes.value.data?.current_stage ?? null);
     }
+
+    if (scheduleRes.status === 'fulfilled' && scheduleRes.value.data?.schedule) {
+      const s = scheduleRes.value.data.schedule;
+      setSchedule(s);
+      if (s.scheduled_at) {
+        // Convert ISO to datetime-local value (YYYY-MM-DDTHH:mm) in local time
+        const dt = new Date(s.scheduled_at);
+        const local = new Date(dt.getTime() - dt.getTimezoneOffset() * 60000)
+          .toISOString()
+          .slice(0, 16);
+        setScheduleAt(local);
+      }
+    } else {
+      setSchedule(null);
+    }
   }, [id]);
 
   useEffect(() => {
@@ -58,7 +90,55 @@ export default function PostDetail() {
     }
   });
 
-  const isClient  = user?.role === 'client' || user?.role === 'viewer';
+  // Live countdown to scheduled_at
+  useEffect(() => {
+    if (!schedule?.scheduled_at) { setCountdown(''); return; }
+
+    function tick() {
+      const diff = new Date(schedule.scheduled_at) - Date.now();
+      if (diff <= 0) { setCountdown('Publishing now…'); return; }
+      const d = Math.floor(diff / 86400000);
+      const h = Math.floor((diff % 86400000) / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      const parts = [];
+      if (d) parts.push(`${d}d`);
+      if (d || h) parts.push(`${h}h`);
+      if (d || h || m) parts.push(`${m}m`);
+      parts.push(`${s}s`);
+      setCountdown(parts.join(' '));
+    }
+
+    tick();
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  }, [schedule?.scheduled_at]);
+
+  async function updateSchedule() {
+    if (!scheduleAt) {
+      setScheduleError('Please select a publish date and time.');
+      return;
+    }
+    const selected = new Date(scheduleAt);
+    if (selected <= new Date()) {
+      setScheduleError('Scheduled time must be in the future.');
+      return;
+    }
+    setScheduleError('');
+    setScheduleSuccess('');
+    setScheduleSubmitting(true);
+    try {
+      await apiClient.patch(`/api/schedule/${id}`, { scheduled_at: selected.toISOString() });
+      setScheduleSuccess('Schedule saved. The post will publish automatically at the chosen time.');
+      await loadData();
+    } catch (err) {
+      setScheduleError(err.response?.data?.error || 'Failed to update schedule.');
+    } finally {
+      setScheduleSubmitting(false);
+    }
+  }
+
+  const isClient = user?.role === 'client' || user?.role === 'viewer';
   const isManager = !isClient; // manager or team_member
 
   async function submitReview(decision) {
@@ -70,7 +150,7 @@ export default function PostDetail() {
     setSubmitting(true);
     try {
       await apiClient.post(`/api/review/${id}`, {
-        reviewer_id:   isClient ? user.user_id : user.manager_id,
+        reviewer_id: isClient ? user.user_id : user.manager_id,
         reviewer_role: isClient ? 'client' : 'manager',
         decision,
         feedback_text: feedback.trim() || null,
@@ -108,13 +188,18 @@ export default function PostDetail() {
     );
   }
 
-  // approvalStage comes from the review service and is updated synchronously on every review action.
-  // post.status (from content service) lags by one async event, so use approvalStage for UI decisions.
-  const currentStage    = approvalStage ?? post.status;
+  // approvalStage (review-service) is authoritative during the review loop.
+  // post.status (content-service) is authoritative for terminal states — the review-service
+  // state machine stops at 'approved' and never advances to 'scheduled' or 'published'.
+  const terminalStatus = post.status === 'scheduled' || post.status === 'published';
+  const currentStage   = terminalStatus ? post.status : (approvalStage ?? post.status);
   const isManagerReview = currentStage === 'manager_review';
-  const isClientReview  = currentStage === 'client_review';
-  const isRegenerating  = currentStage === 'rejected';
-  const canReview       = (isManager && isManagerReview) || (isClient && isClientReview);
+  const isClientReview = currentStage === 'client_review';
+  const isRegenerating = currentStage === 'rejected';
+  const canReview = (isManager && isManagerReview) || (isClient && isClientReview);
+  const isApproved = currentStage === 'approved';
+  const isScheduled = currentStage === 'scheduled';
+  const isPublished = currentStage === 'published';
 
   return (
     <div className="page">
@@ -221,6 +306,79 @@ export default function PostDetail() {
           <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>No reviews yet.</p>
         )}
       </div>
+
+      {/* Scheduled info bar — read-only, shown to everyone once scheduled/published */}
+      {(isScheduled || isPublished) && schedule && (
+        <div className={`schedule-info-bar ${isPublished ? 'schedule-info-bar--published' : ''}`}>
+          <span className="schedule-info-icon">{isPublished ? '✓' : '◷'}</span>
+          <span className="schedule-info-text">
+            {isPublished
+              ? `Published on ${new Date(schedule.fired_at || schedule.scheduled_at).toLocaleString()}`
+              : `Scheduled to publish on ${new Date(schedule.scheduled_at).toLocaleString()}`}
+          </span>
+          {isScheduled && isManager && (
+            <button
+              className="btn btn-ghost btn-sm"
+              style={{ marginLeft: 'auto' }}
+              onClick={() => setScheduleSuccess('') || document.getElementById('schedule-panel')?.scrollIntoView({ behavior: 'smooth' })}
+            >
+              Edit schedule
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Schedule panel — manager only, shown when post is approved or scheduled (not yet fired) */}
+      {isManager && (isApproved || isScheduled) && (
+        <div className="schedule-panel" id="schedule-panel">
+          <div className="schedule-panel-title">
+            {isScheduled ? 'Update Publish Schedule' : 'Schedule Post'}
+          </div>
+          <p className="schedule-panel-desc">
+            {isScheduled
+              ? 'Change the time this post will be automatically published.'
+              : 'This post has been approved. Pick a date and time to publish it.'}
+          </p>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 14, flexWrap: 'wrap' }}>
+            <div className="field" style={{ minWidth: 240 }}>
+              <label className="field-label">Publish date & time</label>
+              <input
+                type="datetime-local"
+                className="field-input"
+                value={scheduleAt}
+                min={new Date(Date.now() + 60000).toISOString().slice(0, 16)}
+                onChange={(e) => {
+                  setScheduleAt(e.target.value);
+                  setScheduleError('');
+                  setScheduleSuccess('');
+                }}
+              />
+            </div>
+            {countdown && (
+              <div className="countdown-badge">
+                <span className="countdown-icon">◷</span>
+                {countdown}
+              </div>
+            )}
+          </div>
+          {scheduleError && (
+            <div className="form-error" style={{ marginTop: 10 }}>{scheduleError}</div>
+          )}
+          {scheduleSuccess && (
+            <div className="schedule-success">{scheduleSuccess}</div>
+          )}
+          <div style={{ marginTop: 14 }}>
+            <button
+              className="btn btn-primary"
+              onClick={updateSchedule}
+              disabled={scheduleSubmitting}
+            >
+              {scheduleSubmitting ? <span className="spinner" /> : null}
+              {isScheduled ? 'Update Schedule' : 'Confirm Schedule'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Review panel — shown to manager at manager_review, or client at client_review */}
       {canReview && (

@@ -27,6 +27,9 @@ async function startConsumer({ onContentCreated }) {
           post_version_id: payload.post_version_id,
           project_id: payload.project_id,
           manager_id: payload.manager_id,
+          platform: payload.platform,
+          caption_text: payload.caption_text,
+          image_url: payload.image_url,
         });
       }
       channel.ack(msg);

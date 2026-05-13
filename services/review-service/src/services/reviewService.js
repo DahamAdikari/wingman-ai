@@ -2,8 +2,8 @@ const queries = require('../db/queries');
 const { publish } = require('../events/publisher');
 
 // Called when CONTENT_CREATED arrives — set/reset approval state to manager_review.
-async function initApprovalState({ post_id, post_version_id, project_id, manager_id }) {
-  await queries.upsertApprovalState({ post_id, project_id, manager_id, post_version_id });
+async function initApprovalState({ post_id, post_version_id, project_id, manager_id, platform, caption_text, image_url }) {
+  await queries.upsertApprovalState({ post_id, project_id, manager_id, post_version_id, platform, caption_text, image_url });
   console.log(`Approval state initialised for post ${post_id} → manager_review`);
 }
 
@@ -77,7 +77,13 @@ async function submitReview({ post_id, manager_id, reviewer_id, reviewer_role, d
   } else if (reviewer_role === 'client') {
     if (decision === 'approved') {
       await queries.setClientApproved(post_id, manager_id);
-      await publish('CONTENT_APPROVED', { ...basePayload, new_status: 'approved' });
+      await publish('CONTENT_APPROVED', {
+        ...basePayload,
+        new_status: 'approved',
+        platform: state.platform,
+        caption_text: state.caption_text,
+        image_url: state.image_url,
+      });
     } else if (decision === 'changes_requested') {
       // Soft rejection — triggers content regeneration with specific feedback
       await queries.setRejected(post_id, manager_id);

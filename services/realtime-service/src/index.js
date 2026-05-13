@@ -5,6 +5,7 @@ const WebSocket = require('ws');
 const jwt = require('jsonwebtoken');
 const { addConnection, removeConnection } = require('./ws/broadcast');
 const { startConsumer } = require('./events/consumer');
+const { registerService, deregisterService } = require('./consulClient');
 
 const PORT = process.env.PORT || 5006;
 
@@ -70,11 +71,17 @@ wss.on('connection', (ws, req) => {
 });
 
 // --- Startup ---
+process.on('SIGTERM', async () => {
+  await deregisterService();
+  process.exit(0);
+});
+
 async function start() {
   await startConsumer();
 
-  server.listen(PORT, () => {
+  server.listen(PORT, async () => {
     console.log(`Realtime Service running on port ${PORT}`);
+    await registerService();
   });
 }
 

@@ -23,9 +23,18 @@ async function initializeTables() {
       current_stage    VARCHAR(50) NOT NULL,
       manager_approved BOOLEAN     DEFAULT FALSE,
       client_approved  BOOLEAN     DEFAULT FALSE,
+      platform         VARCHAR(100),
+      caption_text     TEXT,
+      image_url        TEXT,
       updated_at       TIMESTAMP   DEFAULT NOW()
     );
   `);
+  await pool.query(`
+    ALTER TABLE approval_state ADD COLUMN IF NOT EXISTS platform     VARCHAR(100);
+    ALTER TABLE approval_state ADD COLUMN IF NOT EXISTS caption_text TEXT;
+    ALTER TABLE approval_state ADD COLUMN IF NOT EXISTS image_url    TEXT;
+  `);
+
   console.log('Review DB tables ready');
 }
 

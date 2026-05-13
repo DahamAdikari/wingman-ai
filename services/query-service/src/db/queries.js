@@ -101,6 +101,16 @@ async function onContentRejected({ project_id, manager_id }) {
   );
 }
 
+// READY_TO_PUBLISH — scheduler fired; post is now scheduled
+async function onReadyToPublish({ project_id, manager_id }) {
+  await upsertProjectView(
+    project_id,
+    manager_id,
+    `posts_approved   = GREATEST(posts_approved - 1, 0),
+     last_post_status = 'scheduled'`
+  );
+}
+
 // POST_PUBLISHED — POST_PUBLISHED payload has no project_id, resolve via posts_map
 async function onPostPublished({ post_id, manager_id }) {
   const resolved = await resolvePost(post_id);
@@ -136,6 +146,7 @@ module.exports = {
   onClientFeedback,
   onContentApproved,
   onContentRejected,
+  onReadyToPublish,
   onPostPublished,
   getProjectsForManager,
 };

@@ -1,36 +1,107 @@
 const express = require('express');
 const axios = require('axios');
 const { forward } = require('../proxy/forward');
+const { getServiceUrl } = require('../serviceRegistry');
 
 const router = express.Router();
-const QUERY_SERVICE = process.env.QUERY_SERVICE_URL;
-const CONTENT_SERVICE = process.env.CONTENT_SERVICE_URL;
-const REVIEW_SERVICE = process.env.REVIEW_SERVICE_URL;
-const USER_SERVICE = process.env.USER_SERVICE_URL;
 
 // POST /api/projects → create a new project
-router.post('/', (req, res) => {
-  forward(req, res, `${USER_SERVICE}/projects`);
+router.post('/', async (req, res) => {
+  try {
+    const base = await getServiceUrl('user-service');
+    forward(req, res, `${base}/projects`);
+  } catch (err) {
+    console.error('[gateway] Service discovery failed:', err.message);
+    res.status(503).json({ error: 'Service unavailable' });
+  }
 });
 
 // PATCH /api/projects/:id → update project name / description / status
-router.patch('/:id', (req, res) => {
-  forward(req, res, `${USER_SERVICE}/projects/${req.params.id}`);
+router.patch('/:id', async (req, res) => {
+  try {
+    const base = await getServiceUrl('user-service');
+    forward(req, res, `${base}/projects/${req.params.id}`);
+  } catch (err) {
+    console.error('[gateway] Service discovery failed:', err.message);
+    res.status(503).json({ error: 'Service unavailable' });
+  }
 });
 
 // POST /api/projects/:id/members → enrol a user into a project
-router.post('/:id/members', (req, res) => {
-  forward(req, res, `${USER_SERVICE}/projects/${req.params.id}/members`);
+router.post('/:id/members', async (req, res) => {
+  try {
+    const base = await getServiceUrl('user-service');
+    forward(req, res, `${base}/projects/${req.params.id}/members`);
+  } catch (err) {
+    console.error('[gateway] Service discovery failed:', err.message);
+    res.status(503).json({ error: 'Service unavailable' });
+  }
+});
+
+// GET /api/projects/:id/channels → list connected channels for a project
+router.get('/:id/channels', async (req, res) => {
+  try {
+    const base = await getServiceUrl('user-service');
+    forward(req, res, `${base}/projects/${req.params.id}/channels`);
+  } catch (err) {
+    console.error('[gateway] Service discovery failed:', err.message);
+    res.status(503).json({ error: 'Service unavailable' });
+  }
+});
+
+// POST /api/projects/:id/channels → connect / update a channel
+router.post('/:id/channels', async (req, res) => {
+  try {
+    const base = await getServiceUrl('user-service');
+    forward(req, res, `${base}/projects/${req.params.id}/channels`);
+  } catch (err) {
+    console.error('[gateway] Service discovery failed:', err.message);
+    res.status(503).json({ error: 'Service unavailable' });
+  }
+});
+
+// DELETE /api/projects/:id/channels/:platform → disconnect a channel
+router.delete('/:id/channels/:platform', async (req, res) => {
+  try {
+    const base = await getServiceUrl('user-service');
+    forward(req, res, `${base}/projects/${req.params.id}/channels/${req.params.platform}`);
+  } catch (err) {
+    console.error('[gateway] Service discovery failed:', err.message);
+    res.status(503).json({ error: 'Service unavailable' });
+  }
+});
+
+// POST /api/projects/:id/channels/telegram/test → send a test message to verify connection
+router.post('/:id/channels/telegram/test', async (req, res) => {
+  try {
+    const base = await getServiceUrl('user-service');
+    forward(req, res, `${base}/projects/${req.params.id}/channels/telegram/test`);
+  } catch (err) {
+    console.error('[gateway] Service discovery failed:', err.message);
+    res.status(503).json({ error: 'Service unavailable' });
+  }
 });
 
 // GET /api/projects → dashboard list (fast read from query_db)
-router.get('/', (req, res) => {
-  forward(req, res, `${QUERY_SERVICE}/query/projects`);
+router.get('/', async (req, res) => {
+  try {
+    const base = await getServiceUrl('query-service');
+    forward(req, res, `${base}/query/projects`);
+  } catch (err) {
+    console.error('[gateway] Service discovery failed:', err.message);
+    res.status(503).json({ error: 'Service unavailable' });
+  }
 });
 
 // GET /api/projects/:id/posts → all posts for a project
-router.get('/:id/posts', (req, res) => {
-  forward(req, res, `${CONTENT_SERVICE}/content/project/${req.params.id}`);
+router.get('/:id/posts', async (req, res) => {
+  try {
+    const base = await getServiceUrl('content-service');
+    forward(req, res, `${base}/content/project/${req.params.id}`);
+  } catch (err) {
+    console.error('[gateway] Service discovery failed:', err.message);
+    res.status(503).json({ error: 'Service unavailable' });
+  }
 });
 
 // GET /api/projects/:id/detail → API Composition (parallel fan-out, partial-failure tolerant)
@@ -43,26 +114,38 @@ router.get('/:id/detail', async (req, res) => {
     'x-user-role': req.role || '',
   };
 
-  const [contentResult, reviewResult, membersResult] = await Promise.allSettled([
-    axios.get(`${CONTENT_SERVICE}/content/project/${id}`, { headers, validateStatus: () => true }),
-    axios.get(`${REVIEW_SERVICE}/review/project/${id}`, { headers, validateStatus: () => true }),
-    axios.get(`${USER_SERVICE}/users/project/${id}`, { headers, validateStatus: () => true }),
-  ]);
+  try {
+    // Resolve all three service URLs from Consul in parallel (cached after first call)
+    const [contentBase, reviewBase, userBase] = await Promise.all([
+      getServiceUrl('content-service'),
+      getServiceUrl('review-service'),
+      getServiceUrl('user-service'),
+    ]);
 
-  function toSection(result, label) {
-    if (result.status === 'fulfilled' && result.value.status < 500) {
-      return { available: true, data: result.value.data };
+    const [contentResult, reviewResult, membersResult] = await Promise.allSettled([
+      axios.get(`${contentBase}/content/project/${id}`, { headers, validateStatus: () => true }),
+      axios.get(`${reviewBase}/review/project/${id}`, { headers, validateStatus: () => true }),
+      axios.get(`${userBase}/users/project/${id}`, { headers, validateStatus: () => true }),
+    ]);
+
+    function toSection(result, label) {
+      if (result.status === 'fulfilled' && result.value.status < 500) {
+        return { available: true, data: result.value.data };
+      }
+      const reason = result.reason?.message || `HTTP ${result.value?.status}`;
+      console.warn(`[detail composition] project ${id} — ${label} unavailable: ${reason}`);
+      return { available: false, data: null };
     }
-    const reason = result.reason?.message || `HTTP ${result.value?.status}`;
-    console.warn(`[detail composition] project ${id} — ${label} unavailable: ${reason}`);
-    return { available: false, data: null };
-  }
 
-  res.json({
-    content: toSection(contentResult, 'content-service'),
-    reviews: toSection(reviewResult, 'review-service'),
-    members: toSection(membersResult, 'user-service'),
-  });
+    res.json({
+      content: toSection(contentResult, 'content-service'),
+      reviews: toSection(reviewResult, 'review-service'),
+      members: toSection(membersResult, 'user-service'),
+    });
+  } catch (err) {
+    console.error('[detail composition] Service discovery failed:', err.message);
+    res.status(503).json({ error: 'Service unavailable' });
+  }
 });
 
 module.exports = router;

@@ -3,7 +3,7 @@ const router = express.Router();
 const { createNewPost } = require('../services/contentService');
 const { getPostById, getPostsByProject } = require('../db/queries');
 
-const VALID_PLATFORMS = ['instagram', 'linkedin', 'twitter'];
+const VALID_PLATFORMS = ['instagram', 'linkedin', 'twitter', 'telegram'];
 
 function getManagerId(req) {
   return req.headers['x-manager-id'];

@@ -166,6 +166,58 @@ async function addProjectMember({ project_id, user_id, manager_id, role }) {
   return rows[0];
 }
 
+// ─── Project Channels ─────────────────────────────────────────────────────────
+
+async function listProjectChannels(project_id, manager_id) {
+  const { rows } = await pool.query(
+    `SELECT id, platform, is_enabled, channel_name, account_name, connected_at, updated_at
+     FROM project_channels
+     WHERE project_id = $1 AND manager_id = $2
+     ORDER BY connected_at DESC`,
+    [project_id, manager_id]
+  );
+  return rows;
+}
+
+async function upsertProjectChannel({ project_id, manager_id, platform, bot_token, channel_id, channel_name, access_token, account_id, account_name }) {
+  const { rows } = await pool.query(
+    `INSERT INTO project_channels
+       (project_id, manager_id, platform, bot_token, channel_id, channel_name, access_token, account_id, account_name, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+     ON CONFLICT (project_id, platform) DO UPDATE SET
+       bot_token    = EXCLUDED.bot_token,
+       channel_id   = EXCLUDED.channel_id,
+       channel_name = EXCLUDED.channel_name,
+       access_token = EXCLUDED.access_token,
+       account_id   = EXCLUDED.account_id,
+       account_name = EXCLUDED.account_name,
+       is_enabled   = true,
+       updated_at   = NOW()
+     RETURNING id, platform, is_enabled, channel_name, account_name, connected_at, updated_at`,
+    [project_id, manager_id, platform, bot_token || null, channel_id || null, channel_name || null, access_token || null, account_id || null, account_name || null]
+  );
+  return rows[0];
+}
+
+async function getProjectChannelWithCredentials(project_id, platform) {
+  const { rows } = await pool.query(
+    `SELECT * FROM project_channels
+     WHERE project_id = $1 AND platform = $2 AND is_enabled = true`,
+    [project_id, platform]
+  );
+  return rows[0];
+}
+
+async function deleteProjectChannel(project_id, manager_id, platform) {
+  const { rows } = await pool.query(
+    `DELETE FROM project_channels
+     WHERE project_id = $1 AND manager_id = $2 AND platform = $3
+     RETURNING id`,
+    [project_id, manager_id, platform]
+  );
+  return rows[0];
+}
+
 module.exports = {
   findManagerByEmail,
   createManager,
@@ -183,4 +235,8 @@ module.exports = {
   saveInviteToken,
   findUserByInviteToken,
   clearInviteToken,
+  listProjectChannels,
+  upsertProjectChannel,
+  getProjectChannelWithCredentials,
+  deleteProjectChannel,
 };
