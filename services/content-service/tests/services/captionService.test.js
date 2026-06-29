@@ -7,9 +7,13 @@ describe('generateCaption', () => {
 
   afterEach(() => {
     jest.resetModules();
+    delete process.env.GEMINI_API_KEY;
+    delete process.env.OPENAI_API_KEY;
   });
 
   it('returns caption from Gemini on success', async () => {
+    process.env.GEMINI_API_KEY = 'test-gemini-key';
+
     jest.doMock('@google/generative-ai', () => ({
       GoogleGenerativeAI: jest.fn(() => ({
         getGenerativeModel: () => ({
@@ -27,6 +31,9 @@ describe('generateCaption', () => {
   });
 
   it('falls back to OpenAI when Gemini fails', async () => {
+    process.env.GEMINI_API_KEY = 'test-gemini-key';
+    process.env.OPENAI_API_KEY = 'test-openai-key';
+
     jest.doMock('@google/generative-ai', () => ({
       GoogleGenerativeAI: jest.fn(() => ({
         getGenerativeModel: () => ({

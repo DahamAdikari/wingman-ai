@@ -10,7 +10,11 @@ const {
 const { publish } = require('../events/publisher');
 
 async function createNewPost({ manager_id, project_id, platform, prompt, image_prompt }) {
+  console.log('[contentService] createNewPost called — prompt:', prompt, '| image_prompt:', image_prompt);
+  console.log('[contentService] generating caption...');
   const caption_text = await generateCaption(prompt);
+  console.log('[contentService] caption done:', caption_text?.slice(0, 60));
+  console.log('[contentService] generating image with prompt:', image_prompt || prompt);
   const image_url = await generateImage(image_prompt || prompt);
 
   const post = await createPost({ project_id, manager_id, platform });

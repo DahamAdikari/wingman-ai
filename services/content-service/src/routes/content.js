@@ -11,10 +11,16 @@ function getManagerId(req) {
 
 // POST /content — create a new post and generate content
 router.post('/', async (req, res) => {
+  console.log('[route] POST /content hit');
+  console.log('[route] body:', JSON.stringify(req.body));
+  console.log('[route] headers x-manager-id:', req.headers['x-manager-id']);
+
   const manager_id = getManagerId(req);
   if (!manager_id) return res.status(401).json({ error: 'manager_id required' });
 
   const { project_id, platform, prompt, image_prompt } = req.body;
+  console.log('[route] parsed — project_id:', project_id, '| platform:', platform, '| prompt:', prompt);
+
   if (!project_id || !platform || !prompt) {
     return res.status(400).json({ error: 'project_id, platform, and prompt are required' });
   }
@@ -23,10 +29,13 @@ router.post('/', async (req, res) => {
   }
 
   try {
+    console.log('[route] calling createNewPost...');
     const result = await createNewPost({ manager_id, project_id, platform, prompt, image_prompt });
+    console.log('[route] createNewPost succeeded, post_id:', result?.post?.id);
     res.status(201).json(result);
   } catch (err) {
-    console.error('createNewPost error:', err.message);
+    console.error('[route] createNewPost error:', err.message);
+    console.error('[route] stack:', err.stack);
     res.status(500).json({ error: 'Content creation failed' });
   }
 });

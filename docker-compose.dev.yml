@@ -181,14 +181,12 @@ services:
     container_name: wingman-content-service
     ports:
       - "5002:5002"
+    env_file:
+      - ./services/content-service/.env
     environment:
       PORT: 5002
       DATABASE_URL: postgres://postgres:postgres@content-db:5432/content_db
       RABBITMQ_URL: amqp://admin:password@rabbitmq:5672
-      GEMINI_API_KEY: ${GEMINI_API_KEY}
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-      AI_IMAGE_API_URL: ${AI_IMAGE_API_URL:-}
-      AI_IMAGE_API_KEY: ${AI_IMAGE_API_KEY:-}
       CONSUL_URL: http://consul:8500
       SERVICE_NAME: content-service
       SERVICE_PORT: 5002
