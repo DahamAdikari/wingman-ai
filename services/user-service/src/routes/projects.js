@@ -79,6 +79,48 @@ router.post('/:id/channels', async (req, res) => {
   }
 });
 
+router.post('/:id/channels/instagram/test', async (req, res) => {
+  try {
+    const channel = await db.getProjectChannelWithCredentials(req.params.id, 'instagram');
+    if (!channel) return res.status(404).json({ error: 'Instagram channel not configured' });
+
+    const { access_token, account_id } = channel;
+    if (!access_token) return res.status(400).json({ error: 'Access token missing' });
+
+    // IGAA tokens (new Instagram API) → /me   |   EAA tokens → /{account_id}
+    const isIgaa = access_token.startsWith('IGAA');
+    if (!isIgaa && !account_id) {
+      return res.status(400).json({ error: 'Account ID is required for EAA (business) tokens' });
+    }
+    const userSegment = isIgaa ? 'me' : encodeURIComponent(account_id);
+
+    // Verify the token by fetching account info — no post is created.
+    const result = await new Promise((resolve, reject) => {
+      const path = `/v21.0/${userSegment}?fields=id,username,name&access_token=${encodeURIComponent(access_token)}`;
+      const options = { hostname: 'graph.instagram.com', path, method: 'GET', family: 4 };
+      const request = https.request(options, (response) => {
+        let data = '';
+        response.on('data', (chunk) => { data += chunk; });
+        response.on('end', () => {
+          try { resolve(JSON.parse(data)); }
+          catch { resolve({ error: { message: 'Invalid response from Instagram' } }); }
+        });
+      });
+      request.on('error', reject);
+      request.end();
+    });
+
+    if (result.id) {
+      res.json({ success: true, username: result.username || result.name || result.id });
+    } else {
+      const errorMsg = result.error?.message || 'Instagram API error';
+      res.status(400).json({ success: false, error: errorMsg });
+    }
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 router.post('/:id/channels/telegram/test', async (req, res) => {
   try {
     const channel = await db.getProjectChannelWithCredentials(req.params.id, 'telegram');

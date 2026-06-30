@@ -18,9 +18,9 @@ const PLATFORM_META = {
     label: 'Instagram',
     icon: '📷',
     fields: [
-      { key: 'access_token', label: 'Access Token',  placeholder: 'EAABs...', type: 'password', help: 'Long-lived token from Meta Graph API' },
-      { key: 'account_id',  label: 'Account ID',    placeholder: '17841400...', type: 'text',     help: 'Instagram Business/Creator account ID' },
-      { key: 'account_name', label: 'Display Name', placeholder: '@mybusiness', type: 'text', help: 'Label shown in the dashboard' },
+      { key: 'access_token',  label: 'Access Token',  placeholder: 'IGAABs... or EAABs...', type: 'password', help: 'Long-lived token from Meta/Instagram Graph API' },
+      { key: 'account_id',   label: 'Account ID',    placeholder: '17841400... (EAA tokens only)', type: 'text', help: 'Only required for EAA business tokens — leave blank for IGAA tokens' },
+      { key: 'account_name', label: 'Display Name',  placeholder: '@mybusiness', type: 'text', help: 'Label shown in the dashboard' },
     ],
   },
 };
@@ -59,7 +59,7 @@ function ChannelConnectForm({ platform, onSave, onCancel }) {
               placeholder={f.placeholder}
               value={values[f.key] || ''}
               onChange={(e) => set(f.key, e.target.value)}
-              required={f.key !== 'channel_name' && f.key !== 'account_name'}
+              required={f.key !== 'channel_name' && f.key !== 'account_name' && f.key !== 'account_id'}
             />
             <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3, display: 'block' }}>{f.help}</span>
           </div>
@@ -109,8 +109,11 @@ function ChannelsSection({ projectId }) {
   async function handleTest(platform) {
     setTestResults((prev) => ({ ...prev, [platform]: { state: 'testing' } }));
     try {
-      await apiClient.post(`/api/projects/${projectId}/channels/${platform}/test`);
-      setTestResults((prev) => ({ ...prev, [platform]: { state: 'ok', message: 'Test message sent successfully!' } }));
+      const { data } = await apiClient.post(`/api/projects/${projectId}/channels/${platform}/test`);
+      const msg = platform === 'instagram' && data.username
+        ? `Connected as @${data.username}`
+        : 'Test message sent successfully!';
+      setTestResults((prev) => ({ ...prev, [platform]: { state: 'ok', message: msg } }));
     } catch (err) {
       const msg = err.response?.data?.error || 'Test failed — check credentials';
       setTestResults((prev) => ({ ...prev, [platform]: { state: 'error', message: msg } }));
@@ -160,7 +163,7 @@ function ChannelsSection({ projectId }) {
                         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{displayName}</div>
                       </div>
                       <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: 'rgba(200,255,0,0.1)', color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>connected</span>
-                      {ch.platform === 'telegram' && (
+                      {(ch.platform === 'telegram' || ch.platform === 'instagram') && (
                         <button
                           className="btn btn-secondary btn-sm"
                           style={{ fontSize: 11, padding: '3px 10px' }}

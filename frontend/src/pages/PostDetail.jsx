@@ -227,24 +227,36 @@ export default function PostDetail() {
           </span>
         </div>
 
-        {post.image_url && (
-          <div style={{ marginBottom: 16 }}>
-            <img
-              src={post.image_url}
-              alt="Generated post visual"
-              style={{ maxWidth: '100%', borderRadius: 8, border: '1px solid var(--border)' }}
-              onError={(e) => { e.target.style.display = 'none'; }}
-            />
-          </div>
-        )}
+        <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+          {post.image_url && (
+            <div style={{ flex: '0 0 auto', width: 'min(300px, 100%)' }}>
+              <img
+                src={post.image_url}
+                alt="Generated post visual"
+                style={{
+                  width: '100%',
+                  maxHeight: 300,
+                  objectFit: 'contain',
+                  borderRadius: 8,
+                  border: '1px solid var(--border)',
+                  background: 'var(--surface)',
+                  display: 'block',
+                }}
+                onError={(e) => { e.target.style.display = 'none'; }}
+              />
+            </div>
+          )}
 
-        {post.caption_text ? (
-          <p style={{ fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-wrap', color: 'var(--text-primary)' }}>
-            {post.caption_text}
-          </p>
-        ) : (
-          <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Caption not available.</p>
-        )}
+          <div style={{ flex: '1 1 200px' }}>
+            {post.caption_text ? (
+              <p style={{ fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-wrap', color: 'var(--text-primary)', margin: 0 }}>
+                {post.caption_text}
+              </p>
+            ) : (
+              <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>Caption not available.</p>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Regenerating notice */}

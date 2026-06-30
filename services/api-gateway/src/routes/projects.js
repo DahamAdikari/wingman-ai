@@ -71,6 +71,17 @@ router.delete('/:id/channels/:platform', async (req, res) => {
   }
 });
 
+// POST /api/projects/:id/channels/instagram/test → verify Instagram token without posting
+router.post('/:id/channels/instagram/test', async (req, res) => {
+  try {
+    const base = await getServiceUrl('user-service');
+    forward(req, res, `${base}/projects/${req.params.id}/channels/instagram/test`);
+  } catch (err) {
+    console.error('[gateway] Service discovery failed:', err.message);
+    res.status(503).json({ error: 'Service unavailable' });
+  }
+});
+
 // POST /api/projects/:id/channels/telegram/test → send a test message to verify connection
 router.post('/:id/channels/telegram/test', async (req, res) => {
   try {
