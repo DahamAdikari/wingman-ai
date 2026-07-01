@@ -76,7 +76,24 @@ export default function ClientView() {
         .flatMap((r) => (Array.isArray(r.value.data) ? r.value.data : []))
         .filter((p) => p.status === 'client_review');
 
-      setPosts(allPosts);
+      const stateResults = await Promise.allSettled(
+        allPosts.map((post) => apiClient.get(`/api/review/${post.id}/state`))
+      );
+      const postsWithReviewState = allPosts.map((post, index) => {
+        const state = stateResults[index];
+        if (state.status !== 'fulfilled') return post;
+        const reviewState = state.value.data || {};
+        return {
+          ...post,
+          review_state: reviewState,
+          caption_text: reviewState.caption_text ?? post.caption_text,
+          image_url: reviewState.image_url ?? post.image_url,
+          caption_version_id: reviewState.caption_version_id,
+          image_version_id: reviewState.image_version_id,
+        };
+      });
+
+      setPosts(postsWithReviewState);
     } finally {
       setLoading(false);
     }
@@ -95,9 +112,12 @@ export default function ClientView() {
   }, [load]);
 
   async function respond(postId, decision) {
-    const feedbackText = feedback[postId] || '';
+    const postFeedback = feedback[postId] || {};
+    const captionFeedback = postFeedback.caption || '';
+    const imageFeedback = postFeedback.image || '';
+    const hasFeedback = captionFeedback.trim() || imageFeedback.trim();
 
-    if (decision !== 'approved' && !feedbackText.trim()) {
+    if (decision !== 'approved' && !hasFeedback) {
       setErrors((e) => ({ ...e, [postId]: 'Please describe what needs to change.' }));
       return;
     }
@@ -109,7 +129,8 @@ export default function ClientView() {
         reviewer_id:   user.user_id,
         reviewer_role: 'client',
         decision,
-        feedback_text: feedbackText.trim() || null,
+        caption_feedback: captionFeedback.trim() || null,
+        image_feedback: imageFeedback.trim() || null,
       });
 
       // Remove from list after acting — post moves out of client_review
@@ -223,13 +244,25 @@ export default function ClientView() {
 
               <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16 }}>
                 <div className="field" style={{ marginBottom: 12 }}>
-                  <label className="field-label">Feedback (required for revision requests)</label>
+                  <label className="field-label">Caption feedback</label>
                   <textarea
                     className="field-textarea"
-                    placeholder="Describe what needs to change…"
-                    value={feedback[post.id] || ''}
+                    placeholder="Describe caption changes…"
+                    value={feedback[post.id]?.caption || ''}
                     onChange={(e) =>
-                      setFeedback((f) => ({ ...f, [post.id]: e.target.value }))
+                      setFeedback((f) => ({ ...f, [post.id]: { ...(f[post.id] || {}), caption: e.target.value } }))
+                    }
+                    rows={3}
+                  />
+                </div>
+                <div className="field" style={{ marginBottom: 12 }}>
+                  <label className="field-label">Image feedback</label>
+                  <textarea
+                    className="field-textarea"
+                    placeholder="Describe image changes…"
+                    value={feedback[post.id]?.image || ''}
+                    onChange={(e) =>
+                      setFeedback((f) => ({ ...f, [post.id]: { ...(f[post.id] || {}), image: e.target.value } }))
                     }
                     rows={3}
                   />
@@ -245,7 +278,7 @@ export default function ClientView() {
                   <button
                     className="btn btn-primary btn-sm"
                     onClick={() => respond(post.id, 'approved')}
-                    disabled={submitting[post.id]}
+                    disabled={submitting[post.id] || Boolean((feedback[post.id]?.caption || '').trim() || (feedback[post.id]?.image || '').trim())}
                   >
                     {submitting[post.id] ? <span className="spinner" /> : '✓ Approve'}
                   </button>

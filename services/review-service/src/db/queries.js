@@ -4,10 +4,12 @@ const pool = require('./pool');
 // Uses upsert: if the post already has a state (re-generation), reset it to manager_review.
 async function upsertApprovalState({ post_id, project_id, manager_id, post_version_id, platform, caption_text, image_url, skip_client_review }) {
   const { rows } = await pool.query(
-    `INSERT INTO approval_state (post_id, project_id, manager_id, post_version_id, current_stage, manager_approved, client_approved, platform, caption_text, image_url, skip_client_review, updated_at)
-     VALUES ($1, $2, $3, $4, 'manager_review', FALSE, FALSE, $5, $6, $7, $8, NOW())
+    `INSERT INTO approval_state (post_id, project_id, manager_id, post_version_id, caption_version_id, image_version_id, current_stage, manager_approved, client_approved, platform, caption_text, image_url, skip_client_review, updated_at)
+     VALUES ($1, $2, $3, $4, $4, $4, 'manager_review', FALSE, FALSE, $5, $6, $7, $8, NOW())
      ON CONFLICT (post_id) DO UPDATE SET
        post_version_id    = EXCLUDED.post_version_id,
+       caption_version_id = EXCLUDED.caption_version_id,
+       image_version_id   = EXCLUDED.image_version_id,
        current_stage      = 'manager_review',
        manager_approved   = FALSE,
        client_approved    = FALSE,
@@ -18,6 +20,8 @@ async function upsertApprovalState({ post_id, project_id, manager_id, post_versi
        -- it is set once on first INSERT and preserved for the lifetime of the post.
        skip_client_review = COALESCE(approval_state.skip_client_review, EXCLUDED.skip_client_review),
        client_feedback    = NULL,
+       caption_feedback   = NULL,
+       image_feedback     = NULL,
        updated_at         = NOW()
      RETURNING *`,
     [post_id, project_id, manager_id, post_version_id, platform || null, caption_text || null, image_url || null, skip_client_review || false]
@@ -66,42 +70,62 @@ async function setRejected(post_id, manager_id) {
   return rows[0];
 }
 
-async function setManagerRevision(post_id, manager_id, client_feedback) {
+async function setManagerRevision(post_id, manager_id, client_feedback, caption_feedback, image_feedback) {
   const { rows } = await pool.query(
     `UPDATE approval_state
-     SET current_stage = 'manager_revision', client_feedback = $3, updated_at = NOW()
-     WHERE post_id = $1 AND manager_id = $2
-     RETURNING *`,
-    [post_id, manager_id, client_feedback || null]
-  );
-  return rows[0];
-}
-
-async function setVersionForClientReview({ post_id, manager_id, post_version_id, platform, caption_text, image_url }) {
-  const { rows } = await pool.query(
-    `UPDATE approval_state
-     SET post_version_id = $3,
-         current_stage = 'client_review',
-         manager_approved = TRUE,
-         client_approved = FALSE,
-         platform = COALESCE($4, platform),
-         caption_text = $5,
-         image_url = $6,
-         client_feedback = NULL,
+     SET current_stage = 'manager_revision',
+         client_feedback = $3,
+         caption_feedback = $4,
+         image_feedback = $5,
          updated_at = NOW()
      WHERE post_id = $1 AND manager_id = $2
      RETURNING *`,
-    [post_id, manager_id, post_version_id, platform || null, caption_text || null, image_url || null]
+    [post_id, manager_id, client_feedback || null, caption_feedback || null, image_feedback || null]
   );
   return rows[0];
 }
 
-async function insertReview({ post_id, post_version_id, manager_id, reviewer_id, reviewer_role, decision, feedback_text }) {
+async function setVersionForClientReview({ post_id, manager_id, post_version_id, caption_version_id, image_version_id, platform, caption_text, image_url }) {
   const { rows } = await pool.query(
-    `INSERT INTO reviews (post_id, post_version_id, manager_id, reviewer_id, reviewer_role, decision, feedback_text)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `UPDATE approval_state
+     SET post_version_id = COALESCE($3, $4, $5, post_version_id),
+         caption_version_id = COALESCE($4, $3, caption_version_id),
+         image_version_id = COALESCE($5, $3, image_version_id),
+         current_stage = 'client_review',
+         manager_approved = TRUE,
+         client_approved = FALSE,
+         platform = COALESCE($6, platform),
+         caption_text = $7,
+         image_url = $8,
+         client_feedback = NULL,
+         caption_feedback = NULL,
+         image_feedback = NULL,
+         updated_at = NOW()
+     WHERE post_id = $1 AND manager_id = $2
      RETURNING *`,
-    [post_id, post_version_id, manager_id, reviewer_id, reviewer_role, decision, feedback_text || null]
+    [post_id, manager_id, post_version_id || null, caption_version_id || null, image_version_id || null, platform || null, caption_text || null, image_url || null]
+  );
+  return rows[0];
+}
+
+async function insertReview({ post_id, post_version_id, caption_version_id, image_version_id, manager_id, reviewer_id, reviewer_role, decision, feedback_text, caption_feedback, image_feedback }) {
+  const { rows } = await pool.query(
+    `INSERT INTO reviews (post_id, post_version_id, caption_version_id, image_version_id, manager_id, reviewer_id, reviewer_role, decision, feedback_text, caption_feedback, image_feedback)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+     RETURNING *`,
+    [
+      post_id,
+      post_version_id,
+      caption_version_id || post_version_id,
+      image_version_id || post_version_id,
+      manager_id,
+      reviewer_id,
+      reviewer_role,
+      decision,
+      feedback_text || null,
+      caption_feedback || null,
+      image_feedback || null,
+    ]
   );
   return rows[0];
 }

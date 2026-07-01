@@ -64,12 +64,14 @@ export default function PostDetail() {
   const [approvalStage, setApprovalStage] = useState(null); // from review service — always in sync
   const [approvalState, setApprovalState] = useState(null); // full approval state (for client_feedback)
   const [loading, setLoading] = useState(true);
-  const [feedback, setFeedback] = useState('');
+  const [captionFeedback, setCaptionFeedback] = useState('');
+  const [imageFeedback, setImageFeedback] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
 
   // Refine panel state (manager_revision stage)
   const [refinedPrompt, setRefinedPrompt] = useState('');
+  const [refineTargets, setRefineTargets] = useState({ caption: true, image: true });
   const [refining, setRefining] = useState(false);
   const [refineError, setRefineError] = useState('');
   const [sendingActiveVersion, setSendingActiveVersion] = useState(false);
@@ -77,6 +79,8 @@ export default function PostDetail() {
 
   // Version restore state
   const [restoringVersionId, setRestoringVersionId] = useState(null);
+  const [selectedCaptionVersionId, setSelectedCaptionVersionId] = useState(null);
+  const [selectedImageVersionId, setSelectedImageVersionId] = useState(null);
 
   // Schedule state
   const [schedule, setSchedule] = useState(null);
@@ -119,6 +123,8 @@ export default function PostDetail() {
       const stateData = stateRes.value.data;
       setApprovalStage(stateData?.current_stage ?? null);
       setApprovalState(stateData ?? null);
+      setSelectedCaptionVersionId(stateData?.caption_version_id || stateData?.post_version_id || null);
+      setSelectedImageVersionId(stateData?.image_version_id || stateData?.post_version_id || null);
     }
 
     if (scheduleRes.status === 'fulfilled' && scheduleRes.value.data?.schedule) {
@@ -191,20 +197,37 @@ export default function PostDetail() {
   const isManager = !isClient;
 
   async function submitReview(decision) {
-    if (decision !== 'approved' && !feedback.trim()) {
+    const hasFeedback = captionFeedback.trim() || imageFeedback.trim();
+    if (decision !== 'approved' && !hasFeedback) {
       setSubmitError('Feedback is required when requesting changes.');
       return;
     }
     setSubmitError('');
     setSubmitting(true);
     try {
+      if (isManager && decision === 'approved') {
+        await apiClient.post(`/api/review/${id}/select-version`, {
+          reviewer_id: user.user_id || user.manager_id,
+          version_id: activeVersion.version_id,
+          caption_version_id: selectedCaptionVersion.version_id,
+          image_version_id: selectedImageVersion.version_id,
+          platform: post.platform,
+          caption_text: selectedCaptionVersion.caption_text || null,
+          image_url: selectedImageVersion.image_url || null,
+        });
+        await loadData();
+        return;
+      }
+
       await apiClient.post(`/api/review/${id}`, {
         reviewer_id: isClient ? user.user_id : user.manager_id,
         reviewer_role: isClient ? 'client' : 'manager',
         decision,
-        feedback_text: feedback.trim() || null,
+        caption_feedback: captionFeedback.trim() || null,
+        image_feedback: imageFeedback.trim() || null,
       });
-      setFeedback('');
+      setCaptionFeedback('');
+      setImageFeedback('');
       await loadData();
     } catch (err) {
       setSubmitError(err.response?.data?.error || 'Review submission failed.');
@@ -216,12 +239,19 @@ export default function PostDetail() {
   async function handleRefineSubmit(e) {
     e.preventDefault();
     if (!refinedPrompt.trim()) { setRefineError('Prompt is required.'); return; }
+    const target_parts = Object.entries(refineTargets)
+      .filter(([, selected]) => selected)
+      .map(([part]) => part);
+    if (!target_parts.length) { setRefineError('Select caption, image, or both.'); return; }
     setRefineError('');
     setRefining(true);
     try {
       await apiClient.post(`/api/content/${id}/refine`, {
         refined_prompt: refinedPrompt.trim(),
         base_version_id: activeVersion?.version_id || null,
+        caption_version_id: selectedCaptionVersion?.version_id || activeVersion?.version_id || null,
+        image_version_id: selectedImageVersion?.version_id || activeVersion?.version_id || null,
+        target_parts,
       });
       await loadData();
     } catch (err) {
@@ -232,8 +262,8 @@ export default function PostDetail() {
   }
 
   async function handleSendActiveVersionToClient() {
-    if (!activeVersion?.version_id) {
-      setSendActiveVersionError('Select a version before sending it to the client.');
+    if (!selectedCaptionVersion?.version_id || !selectedImageVersion?.version_id) {
+      setSendActiveVersionError('Select caption and image versions before sending them to the client.');
       return;
     }
 
@@ -243,9 +273,11 @@ export default function PostDetail() {
       await apiClient.post(`/api/review/${id}/select-version`, {
         reviewer_id: user.user_id || user.manager_id,
         version_id: activeVersion.version_id,
+        caption_version_id: selectedCaptionVersion.version_id,
+        image_version_id: selectedImageVersion.version_id,
         platform: post.platform,
-        caption_text: activeVersion.caption_text || null,
-        image_url: activeVersion.image_url || null,
+        caption_text: selectedCaptionVersion.caption_text || null,
+        image_url: selectedImageVersion.image_url || null,
       });
       await loadData();
     } catch (err) {
@@ -308,10 +340,18 @@ export default function PostDetail() {
   // so using `post` directly would always show the latest version instead.
   const activeVersionId = post.active_version_id;
   const activeVersion = versions.find((v) => v.version_id === activeVersionId) || post;
+  const selectedCaptionVersion = versions.find((v) => v.version_id === selectedCaptionVersionId) || activeVersion;
+  const selectedImageVersion = versions.find((v) => v.version_id === selectedImageVersionId) || activeVersion;
+  const visibleVersionLabel = selectedCaptionVersion?.version_id === selectedImageVersion?.version_id
+    ? `v${selectedCaptionVersion?.version_number || activeVersion.version_number}`
+    : `caption v${selectedCaptionVersion?.version_number || activeVersion.version_number} / image v${selectedImageVersion?.version_number || activeVersion.version_number}`;
 
   // Client feedback that triggered manager_revision (from approval state or last review)
+  const lastClientRevision = reviews.filter((r) => r.reviewer_role === 'client' && r.decision === 'changes_requested').slice(-1)[0];
+  const clientCaptionFeedback = approvalState?.caption_feedback || lastClientRevision?.caption_feedback || '';
+  const clientImageFeedback = approvalState?.image_feedback || lastClientRevision?.image_feedback || '';
   const clientFeedback = approvalState?.client_feedback
-    || reviews.filter((r) => r.reviewer_role === 'client' && r.decision === 'changes_requested').slice(-1)[0]?.feedback_text
+    || lastClientRevision?.feedback_text
     || '';
 
   return (
@@ -336,15 +376,15 @@ export default function PostDetail() {
         <div className="section-header">
           <span className="section-title">Generated Content</span>
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)' }}>
-            v{activeVersion.version_number}
+            {visibleVersionLabel}
           </span>
         </div>
 
         <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-          {activeVersion.image_url && (
+          {selectedImageVersion.image_url && (
             <div style={{ flex: '0 0 auto', width: 'min(300px, 100%)' }}>
               <img
-                src={activeVersion.image_url}
+                src={selectedImageVersion.image_url}
                 alt="Generated post visual"
                 style={{
                   width: '100%', maxHeight: 300, objectFit: 'contain',
@@ -357,14 +397,14 @@ export default function PostDetail() {
                 <button
                   type="button"
                   className="btn btn-secondary btn-sm"
-                  onClick={() => openImage(activeVersion.image_url)}
+                  onClick={() => openImage(selectedImageVersion.image_url)}
                 >
                   View image
                 </button>
                 <button
                   type="button"
                   className="btn btn-secondary btn-sm"
-                  onClick={() => downloadImage(activeVersion.image_url, imageFileName(post, activeVersion))}
+                  onClick={() => downloadImage(selectedImageVersion.image_url, imageFileName(post, selectedImageVersion))}
                 >
                   Download
                 </button>
@@ -372,9 +412,9 @@ export default function PostDetail() {
             </div>
           )}
           <div style={{ flex: '1 1 200px' }}>
-            {activeVersion.caption_text ? (
+            {selectedCaptionVersion.caption_text ? (
               <p style={{ fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-wrap', color: 'var(--text-primary)', margin: 0 }}>
-                {activeVersion.caption_text}
+                {selectedCaptionVersion.caption_text}
               </p>
             ) : (
               <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>Caption not available.</p>
@@ -401,7 +441,7 @@ export default function PostDetail() {
             The client has requested changes. You can regenerate from the active version, make another version active from version history, or send the active version back for client review.
           </p>
 
-          {clientFeedback && (
+          {(clientCaptionFeedback || clientImageFeedback || clientFeedback) && (
             <div style={{
               padding: '12px 14px', marginBottom: 16,
               background: 'rgba(255,107,107,0.06)', border: '1px solid rgba(255,107,107,0.2)',
@@ -410,18 +450,51 @@ export default function PostDetail() {
               <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: '#ff6b6b', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 Client Feedback
               </div>
-              <p style={{ margin: 0, fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.6 }}>
-                "{clientFeedback}"
-              </p>
+              {clientCaptionFeedback && (
+                <p style={{ margin: '0 0 8px', fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.6 }}>
+                  <strong>Caption:</strong> {clientCaptionFeedback}
+                </p>
+              )}
+              {clientImageFeedback && (
+                <p style={{ margin: '0 0 8px', fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.6 }}>
+                  <strong>Image:</strong> {clientImageFeedback}
+                </p>
+              )}
+              {!clientCaptionFeedback && !clientImageFeedback && clientFeedback && (
+                <p style={{ margin: 0, fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.6 }}>
+                  "{clientFeedback}"
+                </p>
+              )}
             </div>
           )}
 
           <form onSubmit={handleRefineSubmit}>
             <div className="field">
-              <label className="field-label">Prompt for active version</label>
+              <label className="field-label">Regenerate</label>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-secondary)' }}>
+                  <input
+                    type="checkbox"
+                    checked={refineTargets.caption}
+                    onChange={(e) => setRefineTargets((prev) => ({ ...prev, caption: e.target.checked }))}
+                  />
+                  Caption
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-secondary)' }}>
+                  <input
+                    type="checkbox"
+                    checked={refineTargets.image}
+                    onChange={(e) => setRefineTargets((prev) => ({ ...prev, image: e.target.checked }))}
+                  />
+                  Image
+                </label>
+              </div>
+            </div>
+            <div className="field">
+              <label className="field-label">Prompt for selected version parts</label>
               <textarea
                 className="field-textarea"
-                placeholder="Edit the prompt for the active version before sending it to AI…"
+                placeholder="Edit the prompt before sending the selected caption/image parts to AI…"
                 value={refinedPrompt}
                 onChange={(e) => setRefinedPrompt(e.target.value)}
                 rows={6}
@@ -441,7 +514,7 @@ export default function PostDetail() {
                 onClick={handleSendActiveVersionToClient}
                 disabled={sendingActiveVersion || refining}
               >
-                {sendingActiveVersion ? <><span className="spinner" />Sending…</> : 'Send active version to client'}
+                {sendingActiveVersion ? <><span className="spinner" />Sending…</> : 'Send selected versions to client'}
               </button>
             </div>
             {sendActiveVersionError && (
@@ -463,6 +536,8 @@ export default function PostDetail() {
           <div className="stagger-list">
             {versions.map((v) => {
               const isActive = v.version_id === activeVersionId;
+              const isSelectedCaption = v.version_id === selectedCaptionVersion?.version_id;
+              const isSelectedImage = v.version_id === selectedImageVersion?.version_id;
               return (
                 <div
                   key={v.version_id}
@@ -479,6 +554,22 @@ export default function PostDetail() {
                         active
                       </span>
                     )}
+                    {isSelectedCaption && (
+                      <span style={{
+                        fontSize: 10, fontFamily: 'var(--font-mono)', padding: '2px 8px',
+                        borderRadius: 20, background: 'rgba(79,172,254,0.14)', color: '#4facfe',
+                      }}>
+                        caption
+                      </span>
+                    )}
+                    {isSelectedImage && (
+                      <span style={{
+                        fontSize: 10, fontFamily: 'var(--font-mono)', padding: '2px 8px',
+                        borderRadius: 20, background: 'rgba(67,233,123,0.14)', color: '#43e97b',
+                      }}>
+                        image
+                      </span>
+                    )}
                     {isManager && !isActive && (
                       <button
                         className="btn btn-secondary btn-sm"
@@ -492,6 +583,28 @@ export default function PostDetail() {
                       </button>
                     )}
                   </div>
+                  {isManager && (
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        style={{ fontSize: 11, padding: '2px 10px' }}
+                        onClick={() => setSelectedCaptionVersionId(v.version_id)}
+                        disabled={isSelectedCaption}
+                      >
+                        Use caption
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        style={{ fontSize: 11, padding: '2px 10px' }}
+                        onClick={() => setSelectedImageVersionId(v.version_id)}
+                        disabled={isSelectedImage}
+                      >
+                        Use image
+                      </button>
+                    </div>
+                  )}
                   {v.revision_notes && (
                     <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>
                       Notes: {v.revision_notes}
@@ -602,14 +715,22 @@ export default function PostDetail() {
             {isClientReview ? 'Client Review' : 'Submit Review'}
           </div>
           <div className="field">
-            <label className="field-label">Feedback</label>
+            <label className="field-label">Caption feedback</label>
             <textarea
               className="field-textarea"
-              placeholder={isClientReview
-                ? 'Describe what needs to change. Your feedback will go to the manager who will refine the prompt before regenerating.'
-                : 'Describe what needs to change so the AI can regenerate with your feedback…'}
-              value={feedback}
-              onChange={(e) => setFeedback(e.target.value)}
+              placeholder="Describe caption changes…"
+              value={captionFeedback}
+              onChange={(e) => setCaptionFeedback(e.target.value)}
+              rows={3}
+            />
+          </div>
+          <div className="field">
+            <label className="field-label">Image feedback</label>
+            <textarea
+              className="field-textarea"
+              placeholder="Describe image changes…"
+              value={imageFeedback}
+              onChange={(e) => setImageFeedback(e.target.value)}
               rows={4}
             />
           </div>
@@ -617,7 +738,11 @@ export default function PostDetail() {
             <div className="form-error" style={{ marginBottom: 12 }}>{submitError}</div>
           )}
           <div className="review-actions">
-            <button className="btn btn-primary" onClick={() => submitReview('approved')} disabled={submitting}>
+            <button
+              className="btn btn-primary"
+              onClick={() => submitReview('approved')}
+              disabled={submitting || Boolean(captionFeedback.trim() || imageFeedback.trim())}
+            >
               {submitting ? <span className="spinner" /> : null}
               ✓ Approve
             </button>

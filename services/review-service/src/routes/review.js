@@ -37,11 +37,11 @@ router.get('/:postId/state', async (req, res) => {
 router.post('/:postId/select-version', async (req, res) => {
   const { postId } = req.params;
   const manager_id = req.headers['x-manager-id'];
-  const { reviewer_id, version_id, platform, caption_text, image_url } = req.body;
+  const { reviewer_id, version_id, caption_version_id, image_version_id, platform, caption_text, image_url } = req.body;
 
   if (!manager_id) return res.status(401).json({ error: 'Missing manager_id' });
-  if (!reviewer_id || !version_id) {
-    return res.status(400).json({ error: 'reviewer_id and version_id are required' });
+  if (!reviewer_id || (!version_id && !caption_version_id && !image_version_id)) {
+    return res.status(400).json({ error: 'reviewer_id and at least one version id are required' });
   }
 
   try {
@@ -50,6 +50,8 @@ router.post('/:postId/select-version', async (req, res) => {
       manager_id,
       reviewer_id,
       version_id,
+      caption_version_id,
+      image_version_id,
       platform,
       caption_text,
       image_url,
@@ -85,7 +87,7 @@ router.get('/:postId', async (req, res) => {
 router.post('/:postId', async (req, res) => {
   const { postId } = req.params;
   const manager_id = req.headers['x-manager-id'];
-  const { reviewer_id, reviewer_role, decision, feedback_text } = req.body;
+  const { reviewer_id, reviewer_role, decision, feedback_text, caption_feedback, image_feedback } = req.body;
 
   if (!manager_id) return res.status(401).json({ error: 'Missing manager_id' });
 
@@ -101,12 +103,12 @@ router.post('/:postId', async (req, res) => {
     return res.status(400).json({ error: "decision must be 'approved', 'rejected', or 'changes_requested'" });
   }
 
-  if (decision !== 'approved' && !feedback_text) {
-    return res.status(400).json({ error: 'feedback_text is required when decision is not approved' });
+  if (decision !== 'approved' && !feedback_text && !caption_feedback && !image_feedback) {
+    return res.status(400).json({ error: 'feedback is required when decision is not approved' });
   }
 
   try {
-    const review = await submitReview({ post_id: postId, manager_id, reviewer_id, reviewer_role, decision, feedback_text });
+    const review = await submitReview({ post_id: postId, manager_id, reviewer_id, reviewer_role, decision, feedback_text, caption_feedback, image_feedback });
     res.status(201).json(review);
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });

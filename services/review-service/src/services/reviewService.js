@@ -20,7 +20,15 @@ async function initApprovalState({ post_id, post_version_id, project_id, manager
 //   client_review  + client approved         → approved       → emit CONTENT_APPROVED
 //   client_review  + client rejected         → rejected       → emit CONTENT_REJECTED
 //   client_review  + client changes_req      → manager_revision → emit CLIENT_FEEDBACK (manager refines prompt)
-async function submitReview({ post_id, manager_id, reviewer_id, reviewer_role, decision, feedback_text }) {
+function combineFeedback(feedback_text, caption_feedback, image_feedback) {
+  const parts = [];
+  if (caption_feedback) parts.push(`Caption: ${caption_feedback}`);
+  if (image_feedback) parts.push(`Image: ${image_feedback}`);
+  if (feedback_text && !parts.length) parts.push(feedback_text);
+  return parts.join('\n\n') || null;
+}
+
+async function submitReview({ post_id, manager_id, reviewer_id, reviewer_role, decision, feedback_text, caption_feedback, image_feedback }) {
   const state = await queries.getApprovalState(post_id, manager_id);
   if (!state) {
     const err = new Error(`No approval state found for post ${post_id}`);
@@ -42,20 +50,28 @@ async function submitReview({ post_id, manager_id, reviewer_id, reviewer_role, d
     throw err;
   }
 
+  const combinedFeedback = combineFeedback(feedback_text, caption_feedback, image_feedback);
+
   // Persist the review record
   const review = await queries.insertReview({
     post_id,
     post_version_id: state.post_version_id,
+    caption_version_id: state.caption_version_id,
+    image_version_id: state.image_version_id,
     manager_id,
     reviewer_id,
     reviewer_role,
     decision,
-    feedback_text,
+    feedback_text: combinedFeedback,
+    caption_feedback,
+    image_feedback,
   });
 
   const basePayload = {
     post_id,
     post_version_id: state.post_version_id,
+    caption_version_id: state.caption_version_id,
+    image_version_id: state.image_version_id,
     project_id: state.project_id,
     manager_id,
   };
@@ -83,7 +99,9 @@ async function submitReview({ post_id, manager_id, reviewer_id, reviewer_role, d
         ...basePayload,
         new_status: 'rejected',
         rejected_by: 'manager',
-        feedback_text: feedback_text || '',
+        feedback_text: combinedFeedback || '',
+        caption_feedback: caption_feedback || '',
+        image_feedback: image_feedback || '',
       });
     }
   } else if (reviewer_role === 'client') {
@@ -98,12 +116,14 @@ async function submitReview({ post_id, manager_id, reviewer_id, reviewer_role, d
       });
     } else if (decision === 'changes_requested') {
       // Route feedback back to manager for prompt refinement — no auto-regen
-      await queries.setManagerRevision(post_id, manager_id, feedback_text);
+      await queries.setManagerRevision(post_id, manager_id, combinedFeedback, caption_feedback, image_feedback);
       await publish('CLIENT_FEEDBACK', {
         ...basePayload,
         new_status: 'manager_revision',
         client_id: reviewer_id,
-        feedback_text: feedback_text || '',
+        feedback_text: combinedFeedback || '',
+        caption_feedback: caption_feedback || '',
+        image_feedback: image_feedback || '',
       });
     } else {
       // Hard rejection
@@ -112,7 +132,9 @@ async function submitReview({ post_id, manager_id, reviewer_id, reviewer_role, d
         ...basePayload,
         new_status: 'rejected',
         rejected_by: 'client',
-        feedback_text: feedback_text || '',
+        feedback_text: combinedFeedback || '',
+        caption_feedback: caption_feedback || '',
+        image_feedback: image_feedback || '',
       });
     }
   }
@@ -134,7 +156,7 @@ async function getApprovalState(post_id, manager_id) {
   return state;
 }
 
-async function selectVersionForClientReview({ post_id, manager_id, reviewer_id, version_id, platform, caption_text, image_url }) {
+async function selectVersionForClientReview({ post_id, manager_id, reviewer_id, version_id, caption_version_id, image_version_id, platform, caption_text, image_url }) {
   const state = await queries.getApprovalState(post_id, manager_id);
   if (!state) {
     const err = new Error(`No approval state found for post ${post_id}`);
@@ -152,6 +174,8 @@ async function selectVersionForClientReview({ post_id, manager_id, reviewer_id, 
     post_id,
     manager_id,
     post_version_id: version_id,
+    caption_version_id,
+    image_version_id,
     platform,
     caption_text,
     image_url,
@@ -159,17 +183,21 @@ async function selectVersionForClientReview({ post_id, manager_id, reviewer_id, 
 
   await queries.insertReview({
     post_id,
-    post_version_id: version_id,
+    post_version_id: updated.post_version_id,
+    caption_version_id: updated.caption_version_id,
+    image_version_id: updated.image_version_id,
     manager_id,
     reviewer_id,
     reviewer_role: 'manager',
     decision: 'approved',
-    feedback_text: 'Selected existing version for client review',
+    feedback_text: 'Selected caption and image versions for client review',
   });
 
   const payload = {
     post_id,
-    post_version_id: version_id,
+    post_version_id: updated.post_version_id,
+    caption_version_id: updated.caption_version_id,
+    image_version_id: updated.image_version_id,
     project_id: updated.project_id,
     manager_id,
     platform: updated.platform,

@@ -89,11 +89,19 @@ async function regenerateContent({ post_id, manager_id, revision_notes }) {
 // Called from POST /content/:postId/refine — manager refines prompt after client feedback.
 // If base_version_id is provided, the AI gets the selected version as context instead
 // of always using the newest generated version.
-async function refineAndRegenerate({ post_id, manager_id, refined_prompt, base_version_id }) {
+async function refineAndRegenerate({ post_id, manager_id, refined_prompt, base_version_id, caption_version_id, image_version_id, target_parts }) {
   const rows = await getPostById(post_id, manager_id);
   if (!rows.length) throw new Error(`Post ${post_id} not found`);
 
   const latestVersion = rows[0];
+  const targets = Array.isArray(target_parts) && target_parts.length
+    ? target_parts
+    : ['caption', 'image'];
+
+  if (!targets.every((part) => ['caption', 'image'].includes(part))) {
+    throw new Error('target_parts must contain caption and/or image');
+  }
+
   let baseVersion = latestVersion;
   if (base_version_id) {
     const selectedVersion = await getVersionById(base_version_id, manager_id);
@@ -108,17 +116,36 @@ async function refineAndRegenerate({ post_id, manager_id, refined_prompt, base_v
     };
   }
 
-  const captionPrompt = baseVersion.caption_text
-    ? `Revise this post using the selected version as context.\n\nSelected version caption:\n${baseVersion.caption_text}\n\nManager prompt:\n${refined_prompt}`
+  let captionBaseVersion = baseVersion;
+  if (caption_version_id && caption_version_id !== baseVersion.version_id) {
+    const selectedVersion = await getVersionById(caption_version_id, manager_id);
+    if (!selectedVersion) throw new Error(`Caption version ${caption_version_id} not found`);
+    if (selectedVersion.post_id !== post_id) throw new Error('Caption version does not belong to this post');
+    captionBaseVersion = { ...selectedVersion, version_id: selectedVersion.id };
+  }
+
+  let imageBaseVersion = baseVersion;
+  if (image_version_id && image_version_id !== baseVersion.version_id) {
+    const selectedVersion = await getVersionById(image_version_id, manager_id);
+    if (!selectedVersion) throw new Error(`Image version ${image_version_id} not found`);
+    if (selectedVersion.post_id !== post_id) throw new Error('Image version does not belong to this post');
+    imageBaseVersion = { ...selectedVersion, version_id: selectedVersion.id };
+  }
+
+  const captionPrompt = captionBaseVersion.caption_text
+    ? `Revise this post using the selected version as context.\n\nSelected version caption:\n${captionBaseVersion.caption_text}\n\nManager prompt:\n${refined_prompt}`
     : refined_prompt;
 
-  const imagePrompt = baseVersion.image_prompt
-    ? `${refined_prompt}\n\nKeep visual continuity with this selected version prompt:\n${baseVersion.image_prompt}`
+  const imagePrompt = imageBaseVersion.image_prompt
+    ? `${refined_prompt}\n\nKeep visual continuity with this selected version prompt:\n${imageBaseVersion.image_prompt}`
     : refined_prompt;
 
-  const caption_text = await generateCaption(captionPrompt);
-  const image_url = await generateImage(imagePrompt);
+  const [caption_text, image_url] = await Promise.all([
+    targets.includes('caption') ? generateCaption(captionPrompt) : Promise.resolve(captionBaseVersion.caption_text),
+    targets.includes('image') ? generateImage(imagePrompt) : Promise.resolve(imageBaseVersion.image_url),
+  ]);
   const next_version = (await getLatestVersionNumber(post_id)) + 1;
+  const changedLabel = targets.length === 2 ? 'caption and image' : targets[0];
 
   const version = await createPostVersion({
     post_id,
@@ -126,8 +153,8 @@ async function refineAndRegenerate({ post_id, manager_id, refined_prompt, base_v
     version_number: next_version,
     caption_text,
     image_url,
-    image_prompt: imagePrompt,
-    revision_notes: `Manager refinement from v${baseVersion.version_number || 'selected'} (v${next_version})`,
+    image_prompt: targets.includes('image') ? imagePrompt : imageBaseVersion.image_prompt,
+    revision_notes: `Manager refinement of ${changedLabel} from v${baseVersion.version_number || 'selected'} (v${next_version})`,
   });
 
   await setActiveVersion(post_id, manager_id, version.id);

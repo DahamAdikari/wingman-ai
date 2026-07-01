@@ -35,6 +35,14 @@ async function initializeTables() {
     ALTER TABLE approval_state ADD COLUMN IF NOT EXISTS image_url          TEXT;
     ALTER TABLE approval_state ADD COLUMN IF NOT EXISTS skip_client_review BOOLEAN DEFAULT FALSE;
     ALTER TABLE approval_state ADD COLUMN IF NOT EXISTS client_feedback    TEXT;
+    ALTER TABLE approval_state ADD COLUMN IF NOT EXISTS caption_version_id UUID;
+    ALTER TABLE approval_state ADD COLUMN IF NOT EXISTS image_version_id   UUID;
+    ALTER TABLE approval_state ADD COLUMN IF NOT EXISTS caption_feedback   TEXT;
+    ALTER TABLE approval_state ADD COLUMN IF NOT EXISTS image_feedback     TEXT;
+    ALTER TABLE reviews ADD COLUMN IF NOT EXISTS caption_version_id UUID;
+    ALTER TABLE reviews ADD COLUMN IF NOT EXISTS image_version_id   UUID;
+    ALTER TABLE reviews ADD COLUMN IF NOT EXISTS caption_feedback   TEXT;
+    ALTER TABLE reviews ADD COLUMN IF NOT EXISTS image_feedback     TEXT;
   `);
 
   console.log('Review DB tables ready');
