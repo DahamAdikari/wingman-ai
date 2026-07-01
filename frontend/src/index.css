@@ -614,6 +614,61 @@ select.field-input option { background: #17171e; color: #edeae3; }
 .post-item-title { font-size: 13.5px; font-weight: 600; color: var(--text-primary); letter-spacing: -0.01em; }
 .post-item-meta { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); margin-top: 2px; }
 
+.posts-status-strip {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.posts-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.posts-index-item {
+  gap: 14px;
+}
+
+.posts-index-main {
+  min-width: 0;
+}
+
+.posts-index-side {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.posts-index-platform {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+@media (max-width: 640px) {
+  .posts-index-item {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .posts-index-side {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+
 /* Review items */
 .review-item {
   padding: 13px 16px;

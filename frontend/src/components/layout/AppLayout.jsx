@@ -5,10 +5,24 @@ import { ROLES } from '../../utils/roles';
 const NAV_BY_ROLE = {
   [ROLES.MANAGER]:     [
     { label: 'Projects', path: '/dashboard', icon: '◈' },
+    { label: 'Posts',    path: '/posts',     icon: '▣' },
+    { label: 'Reviews',  path: '/reviews',   icon: '◉' },
+    { label: 'Schedule', path: '/schedule',  icon: '◷' },
     { label: 'People',   path: '/people',    icon: '◎' },
   ],
-  [ROLES.TEAM_MEMBER]: [{ label: 'Projects', path: '/dashboard', icon: '◈' }],
-  [ROLES.CLIENT]:      [{ label: 'My Posts',  path: '/client',    icon: '◈' }],
+  [ROLES.TEAM_MEMBER]: [
+    { label: 'Projects', path: '/dashboard', icon: '◈' },
+    { label: 'Posts',    path: '/posts',     icon: '▣' },
+    { label: 'Reviews',  path: '/reviews',   icon: '◉' },
+    { label: 'Schedule', path: '/schedule',  icon: '◷' },
+  ],
+  [ROLES.CLIENT]:      [
+    { label: 'My Posts',  path: '/client',    icon: '◈' },
+    { label: 'Posts',     path: '/posts',     icon: '▣' },
+  ],
+  [ROLES.VIEWER]:      [
+    { label: 'Posts',     path: '/posts',     icon: '▣' },
+  ],
 };
 
 export default function AppLayout({ children }) {
@@ -37,7 +51,8 @@ export default function AppLayout({ children }) {
           {navItems.map((item) => {
             const active =
               location.pathname === item.path ||
-              (item.path === '/dashboard' && location.pathname.startsWith('/projects'));
+              (item.path === '/dashboard' && location.pathname.startsWith('/projects')) ||
+              (item.path === '/posts' && location.pathname.startsWith('/posts'));
             return (
               <Link
                 key={item.path}

@@ -6,6 +6,7 @@ import People from './pages/People';
 import Dashboard from './pages/Dashboard';
 import ProjectDetail from './pages/ProjectDetail';
 import PostDetail from './pages/PostDetail';
+import Posts from './pages/Posts';
 import CreatePost from './pages/CreatePost';
 import ClientView from './pages/ClientView';
 import ProtectedRoute from './components/common/ProtectedRoute';
@@ -50,6 +51,30 @@ export default function App() {
             element={
               <ProtectedRoute roles={[ROLES.MANAGER, ROLES.TEAM_MEMBER]}>
                 <CreatePost />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/posts"
+            element={
+              <ProtectedRoute>
+                <Posts view="all" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/reviews"
+            element={
+              <ProtectedRoute roles={[ROLES.MANAGER, ROLES.TEAM_MEMBER]}>
+                <Posts view="review" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/schedule"
+            element={
+              <ProtectedRoute roles={[ROLES.MANAGER, ROLES.TEAM_MEMBER]}>
+                <Posts view="schedule" />
               </ProtectedRoute>
             }
           />
