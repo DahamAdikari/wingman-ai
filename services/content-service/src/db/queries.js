@@ -43,15 +43,23 @@ async function getPostById(id, manager_id) {
   return rows;
 }
 
-// Returns posts with their latest version joined
+// Returns posts with their active version joined. Falls back to latest version
+// for older rows that do not have active_version_id populated.
 async function getPostsByProject(project_id, manager_id) {
   const { rows } = await pool.query(
-    `SELECT p.*, pv.version_number, pv.caption_text, pv.image_url
+    `SELECT p.*,
+            COALESCE(av.version_number, lv.version_number) AS version_number,
+            COALESCE(av.caption_text, lv.caption_text) AS caption_text,
+            COALESCE(av.image_url, lv.image_url) AS image_url
      FROM posts p
-     LEFT JOIN post_versions pv ON pv.post_id = p.id
-       AND pv.version_number = (
-         SELECT MAX(version_number) FROM post_versions WHERE post_id = p.id
-       )
+     LEFT JOIN post_versions av ON av.id = p.active_version_id
+     LEFT JOIN LATERAL (
+       SELECT version_number, caption_text, image_url
+       FROM post_versions
+       WHERE post_id = p.id
+       ORDER BY version_number DESC
+       LIMIT 1
+     ) lv ON av.id IS NULL
      WHERE p.project_id = $1 AND p.manager_id = $2
      ORDER BY p.created_at DESC`,
     [project_id, manager_id]

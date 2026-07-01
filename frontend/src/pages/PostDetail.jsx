@@ -5,6 +5,54 @@ import StatusBadge from '../components/common/StatusBadge';
 import { useAuth } from '../hooks/useAuth';
 import { useWebSocket } from '../hooks/useWebSocket';
 
+function imageExtension(url) {
+  if (url?.startsWith('data:image/')) {
+    return url.slice('data:image/'.length).split(';')[0] || 'png';
+  }
+
+  try {
+    const ext = new URL(url).pathname.match(/\.(png|jpe?g|webp|gif)$/i)?.[1];
+    return ext || 'png';
+  } catch {
+    return 'png';
+  }
+}
+
+function imageFileName(post, version) {
+  const platform = post?.platform || 'post';
+  const versionNumber = version?.version_number || 'image';
+  return `${platform}-post-v${versionNumber}.${imageExtension(version?.image_url)}`;
+}
+
+function openImage(url) {
+  if (!url) return;
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
+async function downloadImage(url, fileName) {
+  if (!url) return;
+  const link = document.createElement('a');
+  let objectUrl = null;
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error('Image request failed');
+    const blob = await response.blob();
+    objectUrl = URL.createObjectURL(blob);
+    link.href = objectUrl;
+  } catch {
+    link.href = url;
+    link.target = '_blank';
+  } finally {
+    link.download = fileName;
+    link.rel = 'noopener noreferrer';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    if (objectUrl) setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+  }
+}
+
 export default function PostDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -225,8 +273,10 @@ export default function PostDetail() {
   const isScheduled = currentStage === 'scheduled';
   const isPublished = currentStage === 'published';
 
-  // The active version to highlight in version history
+  // The active version drives the visible image/caption. Rows are sorted newest-first,
+  // so using `post` directly would always show the latest version instead.
   const activeVersionId = post.active_version_id;
+  const activeVersion = versions.find((v) => v.version_id === activeVersionId) || post;
 
   // Client feedback that triggered manager_revision (from approval state or last review)
   const clientFeedback = approvalState?.client_feedback
@@ -250,20 +300,20 @@ export default function PostDetail() {
         <StatusBadge status={currentStage} />
       </div>
 
-      {/* Latest generated content */}
+      {/* Active generated content */}
       <div className="section">
         <div className="section-header">
           <span className="section-title">Generated Content</span>
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)' }}>
-            v{post.version_number}
+            v{activeVersion.version_number}
           </span>
         </div>
 
         <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-          {post.image_url && (
+          {activeVersion.image_url && (
             <div style={{ flex: '0 0 auto', width: 'min(300px, 100%)' }}>
               <img
-                src={post.image_url}
+                src={activeVersion.image_url}
                 alt="Generated post visual"
                 style={{
                   width: '100%', maxHeight: 300, objectFit: 'contain',
@@ -272,12 +322,28 @@ export default function PostDetail() {
                 }}
                 onError={(e) => { e.target.style.display = 'none'; }}
               />
+              <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => openImage(activeVersion.image_url)}
+                >
+                  View image
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => downloadImage(activeVersion.image_url, imageFileName(post, activeVersion))}
+                >
+                  Download
+                </button>
+              </div>
             </div>
           )}
           <div style={{ flex: '1 1 200px' }}>
-            {post.caption_text ? (
+            {activeVersion.caption_text ? (
               <p style={{ fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-wrap', color: 'var(--text-primary)', margin: 0 }}>
-                {post.caption_text}
+                {activeVersion.caption_text}
               </p>
             ) : (
               <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>Caption not available.</p>

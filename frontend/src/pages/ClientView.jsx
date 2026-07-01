@@ -4,6 +4,54 @@ import { useAuth } from '../hooks/useAuth';
 import { useWebSocket } from '../hooks/useWebSocket';
 import StatusBadge from '../components/common/StatusBadge';
 
+function imageExtension(url) {
+  if (url?.startsWith('data:image/')) {
+    return url.slice('data:image/'.length).split(';')[0] || 'png';
+  }
+
+  try {
+    const ext = new URL(url).pathname.match(/\.(png|jpe?g|webp|gif)$/i)?.[1];
+    return ext || 'png';
+  } catch {
+    return 'png';
+  }
+}
+
+function imageFileName(post) {
+  const platform = post?.platform || 'post';
+  const versionNumber = post?.version_number || 'image';
+  return `${platform}-post-v${versionNumber}.${imageExtension(post?.image_url)}`;
+}
+
+function openImage(url) {
+  if (!url) return;
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
+async function downloadImage(url, fileName) {
+  if (!url) return;
+  const link = document.createElement('a');
+  let objectUrl = null;
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error('Image request failed');
+    const blob = await response.blob();
+    objectUrl = URL.createObjectURL(blob);
+    link.href = objectUrl;
+  } catch {
+    link.href = url;
+    link.target = '_blank';
+  } finally {
+    link.download = fileName;
+    link.rel = 'noopener noreferrer';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    if (objectUrl) setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+  }
+}
+
 export default function ClientView() {
   const { user } = useAuth();
   const [posts, setPosts]       = useState([]);
@@ -140,6 +188,22 @@ export default function ClientView() {
                     style={{ maxWidth: '100%', borderRadius: 8, border: '1px solid var(--border)' }}
                     onError={(e) => { e.target.style.display = 'none'; }}
                   />
+                  <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => openImage(post.image_url)}
+                    >
+                      View image
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => downloadImage(post.image_url, imageFileName(post))}
+                    >
+                      Download
+                    </button>
+                  </div>
                 </div>
               )}
 
