@@ -31,7 +31,7 @@ async function updatePostStatus(post_id, manager_id, status) {
 // Returns all versions for a post, newest first
 async function getPostById(id, manager_id) {
   const { rows } = await pool.query(
-    `SELECT p.id, p.project_id, p.manager_id, p.platform, p.status, p.created_at, p.updated_at,
+    `SELECT p.id, p.project_id, p.manager_id, p.platform, p.status, p.active_version_id, p.created_at, p.updated_at,
             pv.id AS version_id, pv.version_number, pv.caption_text, pv.image_url,
             pv.image_prompt, pv.revision_notes, pv.created_at AS version_created_at
      FROM posts p
@@ -67,6 +67,25 @@ async function getLatestVersionNumber(post_id) {
   return rows[0].max;
 }
 
+async function setActiveVersion(post_id, manager_id, version_id) {
+  await pool.query(
+    `UPDATE posts SET active_version_id = $3, updated_at = NOW()
+     WHERE id = $1 AND manager_id = $2`,
+    [post_id, manager_id, version_id]
+  );
+}
+
+async function getVersionById(version_id, manager_id) {
+  const { rows } = await pool.query(
+    `SELECT pv.*, p.project_id, p.platform, p.status
+     FROM post_versions pv
+     JOIN posts p ON p.id = pv.post_id
+     WHERE pv.id = $1 AND pv.manager_id = $2`,
+    [version_id, manager_id]
+  );
+  return rows[0];
+}
+
 // Upsert an asset reference received via ASSET_UPLOADED event.
 // Stores URL/ID only — never the actual file (which lives in asset-service's S3).
 async function cacheAsset({ asset_id, manager_id, project_id, type, file_url }) {
@@ -85,5 +104,7 @@ module.exports = {
   getPostById,
   getPostsByProject,
   getLatestVersionNumber,
+  setActiveVersion,
+  getVersionById,
   cacheAsset,
 };

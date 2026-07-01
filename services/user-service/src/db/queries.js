@@ -109,13 +109,24 @@ async function listUsersForProject(project_id, manager_id) {
 
 async function listProjects(manager_id) {
   const { rows } = await pool.query(
-    `SELECT id, name, description, status, created_at
+    `SELECT id, name, description, status, skip_client_review, created_at
      FROM projects
      WHERE manager_id = $1
      ORDER BY created_at DESC`,
     [manager_id]
   );
   return rows;
+}
+
+async function updateProjectConfig({ id, manager_id, skip_client_review }) {
+  const { rows } = await pool.query(
+    `UPDATE projects
+     SET skip_client_review = $3
+     WHERE id = $1 AND manager_id = $2
+     RETURNING id, name, description, status, skip_client_review, created_at`,
+    [id, manager_id, skip_client_review]
+  );
+  return rows[0];
 }
 
 async function createProject({ manager_id, name, description }) {
@@ -231,6 +242,7 @@ module.exports = {
   listProjects,
   createProject,
   updateProject,
+  updateProjectConfig,
   addProjectMember,
   saveInviteToken,
   findUserByInviteToken,

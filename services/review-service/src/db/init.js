@@ -30,9 +30,11 @@ async function initializeTables() {
     );
   `);
   await pool.query(`
-    ALTER TABLE approval_state ADD COLUMN IF NOT EXISTS platform     VARCHAR(100);
-    ALTER TABLE approval_state ADD COLUMN IF NOT EXISTS caption_text TEXT;
-    ALTER TABLE approval_state ADD COLUMN IF NOT EXISTS image_url    TEXT;
+    ALTER TABLE approval_state ADD COLUMN IF NOT EXISTS platform           VARCHAR(100);
+    ALTER TABLE approval_state ADD COLUMN IF NOT EXISTS caption_text       TEXT;
+    ALTER TABLE approval_state ADD COLUMN IF NOT EXISTS image_url          TEXT;
+    ALTER TABLE approval_state ADD COLUMN IF NOT EXISTS skip_client_review BOOLEAN DEFAULT FALSE;
+    ALTER TABLE approval_state ADD COLUMN IF NOT EXISTS client_feedback    TEXT;
   `);
 
   console.log('Review DB tables ready');

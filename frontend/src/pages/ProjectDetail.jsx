@@ -446,6 +446,8 @@ export default function ProjectDetail() {
   const [error, setError]                 = useState('');
   const [localMembers, setLocalMembers]   = useState(null); // optimistic
   const [showAddMember, setShowAddMember] = useState(false);
+  const [skipClientReview, setSkipClientReview] = useState(false);
+  const [savingConfig, setSavingConfig]         = useState(false);
 
   const loadDetail = useCallback(() => {
     return apiClient
@@ -454,6 +456,9 @@ export default function ProjectDetail() {
         setDetail(data);
         if (data?.members?.available && Array.isArray(data.members.data)) {
           setLocalMembers(data.members.data);
+        }
+        if (typeof data?.project?.skip_client_review === 'boolean') {
+          setSkipClientReview(data.project.skip_client_review);
         }
       })
       .catch((err) => {
@@ -501,6 +506,18 @@ export default function ProjectDetail() {
   function handleMemberAdded(newMember) {
     setLocalMembers((prev) => [...(prev || []), newMember]);
     setShowAddMember(false);
+  }
+
+  async function handleToggleSkipClientReview(val) {
+    setSkipClientReview(val);
+    setSavingConfig(true);
+    try {
+      await apiClient.patch(`/api/projects/${id}/config`, { skip_client_review: val });
+    } catch {
+      setSkipClientReview(!val); // revert on failure
+    } finally {
+      setSavingConfig(false);
+    }
   }
 
   if (loading) {
@@ -622,14 +639,27 @@ export default function ProjectDetail() {
       <div className="section">
         <div className="section-header">
           <span className="section-title">Team & Members</span>
-          {members !== null && !showAddMember && (
-            <button
-              className="btn btn-secondary btn-sm"
-              onClick={() => setShowAddMember(true)}
-            >
-              + Add Member
-            </button>
-          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
+              <input
+                type="checkbox"
+                checked={skipClientReview}
+                onChange={(e) => handleToggleSkipClientReview(e.target.checked)}
+                disabled={savingConfig}
+                style={{ accentColor: 'var(--accent)' }}
+              />
+              Skip client review
+              {savingConfig && <span className="spinner" style={{ width: 10, height: 10 }} />}
+            </label>
+            {members !== null && !showAddMember && (
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => setShowAddMember(true)}
+              >
+                + Add Member
+              </button>
+            )}
+          </div>
         </div>
 
         {showAddMember && (

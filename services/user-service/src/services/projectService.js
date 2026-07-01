@@ -32,4 +32,13 @@ async function addProjectMember({ project_id, user_id, manager_id, role }) {
   return db.addProjectMember({ project_id, user_id, manager_id, role });
 }
 
-module.exports = { listProjects, createProject, updateProject, addProjectMember };
+async function updateProjectConfig({ id, manager_id, skip_client_review }) {
+  if (typeof skip_client_review !== 'boolean') {
+    throw new Error('skip_client_review must be a boolean');
+  }
+  const project = await db.updateProjectConfig({ id, manager_id, skip_client_review });
+  if (!project) throw new Error('Project not found');
+  return project;
+}
+
+module.exports = { listProjects, createProject, updateProject, addProjectMember, updateProjectConfig };

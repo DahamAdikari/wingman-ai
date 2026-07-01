@@ -21,12 +21,15 @@ async function startConsumer({ regenerateContent, cacheAsset, updatePostStatus }
     console.log(`Received event: ${payload.event}`);
 
     try {
-      if (payload.event === 'CLIENT_FEEDBACK' || payload.event === 'CONTENT_REJECTED') {
+      if (payload.event === 'CONTENT_REJECTED') {
         await regenerateContent({
           post_id: payload.post_id,
           manager_id: payload.manager_id,
           revision_notes: payload.feedback_text,
         });
+      } else if (payload.event === 'CLIENT_FEEDBACK') {
+        // Client feedback goes back to manager for prompt refinement — no auto-regen
+        await updatePostStatus(payload.post_id, payload.manager_id, 'manager_revision');
       } else if (payload.event === 'MANAGER_APPROVED') {
         await updatePostStatus(payload.post_id, payload.manager_id, 'client_review');
       } else if (payload.event === 'CONTENT_APPROVED') {

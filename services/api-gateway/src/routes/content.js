@@ -26,4 +26,26 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// POST /api/content/:id/refine → manager submits refined prompt after client feedback
+router.post('/:id/refine', async (req, res) => {
+  try {
+    const base = await getServiceUrl('content-service');
+    forward(req, res, `${base}/content/${req.params.id}/refine`);
+  } catch (err) {
+    console.error('[gateway] Service discovery failed:', err.message);
+    res.status(503).json({ error: 'Service unavailable' });
+  }
+});
+
+// PUT /api/content/:id/versions/:versionId/restore → roll back to a previous version
+router.put('/:id/versions/:versionId/restore', async (req, res) => {
+  try {
+    const base = await getServiceUrl('content-service');
+    forward(req, res, `${base}/content/${req.params.id}/versions/${req.params.versionId}/restore`);
+  } catch (err) {
+    console.error('[gateway] Service discovery failed:', err.message);
+    res.status(503).json({ error: 'Service unavailable' });
+  }
+});
+
 module.exports = router;

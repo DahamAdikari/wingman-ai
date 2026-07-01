@@ -16,6 +16,17 @@ router.post('/', async (req, res) => {
   }
 });
 
+// PATCH /api/projects/:id/config → toggle skip_client_review and other project settings
+router.patch('/:id/config', async (req, res) => {
+  try {
+    const base = await getServiceUrl('user-service');
+    forward(req, res, `${base}/projects/${req.params.id}/config`);
+  } catch (err) {
+    console.error('[gateway] Service discovery failed:', err.message);
+    res.status(503).json({ error: 'Service unavailable' });
+  }
+});
+
 // PATCH /api/projects/:id → update project name / description / status
 router.patch('/:id', async (req, res) => {
   try {

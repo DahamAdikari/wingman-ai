@@ -2,8 +2,8 @@ const queries = require('../db/queries');
 const { publish } = require('../events/publisher');
 
 // Called when CONTENT_CREATED arrives — set/reset approval state to manager_review.
-async function initApprovalState({ post_id, post_version_id, project_id, manager_id, platform, caption_text, image_url }) {
-  await queries.upsertApprovalState({ post_id, project_id, manager_id, post_version_id, platform, caption_text, image_url });
+async function initApprovalState({ post_id, post_version_id, project_id, manager_id, platform, caption_text, image_url, skip_client_review }) {
+  await queries.upsertApprovalState({ post_id, project_id, manager_id, post_version_id, platform, caption_text, image_url, skip_client_review });
   console.log(`Approval state initialised for post ${post_id} → manager_review`);
 }
 
@@ -14,12 +14,12 @@ async function initApprovalState({ post_id, post_version_id, project_id, manager
 //   client  : 'approved' | 'rejected' | 'changes_requested'
 //
 // State machine:
-//   manager_review + manager approved        → client_review  → emit MANAGER_APPROVED
+//   manager_review + manager approved        → client_review (or approved if skip_client_review) → emit MANAGER_APPROVED (or CONTENT_APPROVED)
 //   manager_review + manager rejected        → rejected       → emit CONTENT_REJECTED
 //   manager_review + manager changes_req     → rejected       → emit CONTENT_REJECTED (regen)
 //   client_review  + client approved         → approved       → emit CONTENT_APPROVED
 //   client_review  + client rejected         → rejected       → emit CONTENT_REJECTED
-//   client_review  + client changes_req      → rejected       → emit CLIENT_FEEDBACK  (soft regen)
+//   client_review  + client changes_req      → manager_revision → emit CLIENT_FEEDBACK (manager refines prompt)
 async function submitReview({ post_id, manager_id, reviewer_id, reviewer_role, decision, feedback_text }) {
   const state = await queries.getApprovalState(post_id, manager_id);
   if (!state) {
@@ -62,8 +62,20 @@ async function submitReview({ post_id, manager_id, reviewer_id, reviewer_role, d
 
   if (reviewer_role === 'manager') {
     if (decision === 'approved') {
-      await queries.setManagerApproved(post_id, manager_id);
-      await publish('MANAGER_APPROVED', { ...basePayload, new_status: 'client_review' });
+      if (state.skip_client_review) {
+        // No clients on this project — skip straight to approved
+        await queries.setClientApproved(post_id, manager_id);
+        await publish('CONTENT_APPROVED', {
+          ...basePayload,
+          new_status: 'approved',
+          platform: state.platform,
+          caption_text: state.caption_text,
+          image_url: state.image_url,
+        });
+      } else {
+        await queries.setManagerApproved(post_id, manager_id);
+        await publish('MANAGER_APPROVED', { ...basePayload, new_status: 'client_review' });
+      }
     } else {
       // 'rejected' or 'changes_requested' — both trigger regeneration
       await queries.setRejected(post_id, manager_id);
@@ -85,11 +97,11 @@ async function submitReview({ post_id, manager_id, reviewer_id, reviewer_role, d
         image_url: state.image_url,
       });
     } else if (decision === 'changes_requested') {
-      // Soft rejection — triggers content regeneration with specific feedback
-      await queries.setRejected(post_id, manager_id);
+      // Route feedback back to manager for prompt refinement — no auto-regen
+      await queries.setManagerRevision(post_id, manager_id, feedback_text);
       await publish('CLIENT_FEEDBACK', {
         ...basePayload,
-        new_status: 'rejected',
+        new_status: 'manager_revision',
         client_id: reviewer_id,
         feedback_text: feedback_text || '',
       });

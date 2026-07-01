@@ -2,21 +2,25 @@ const pool = require('./pool');
 
 // Called when CONTENT_CREATED is received — establishes the approval state for a new post version.
 // Uses upsert: if the post already has a state (re-generation), reset it to manager_review.
-async function upsertApprovalState({ post_id, project_id, manager_id, post_version_id, platform, caption_text, image_url }) {
+async function upsertApprovalState({ post_id, project_id, manager_id, post_version_id, platform, caption_text, image_url, skip_client_review }) {
   const { rows } = await pool.query(
-    `INSERT INTO approval_state (post_id, project_id, manager_id, post_version_id, current_stage, manager_approved, client_approved, platform, caption_text, image_url, updated_at)
-     VALUES ($1, $2, $3, $4, 'manager_review', FALSE, FALSE, $5, $6, $7, NOW())
+    `INSERT INTO approval_state (post_id, project_id, manager_id, post_version_id, current_stage, manager_approved, client_approved, platform, caption_text, image_url, skip_client_review, updated_at)
+     VALUES ($1, $2, $3, $4, 'manager_review', FALSE, FALSE, $5, $6, $7, $8, NOW())
      ON CONFLICT (post_id) DO UPDATE SET
-       post_version_id  = EXCLUDED.post_version_id,
-       current_stage    = 'manager_review',
-       manager_approved = FALSE,
-       client_approved  = FALSE,
-       platform         = EXCLUDED.platform,
-       caption_text     = EXCLUDED.caption_text,
-       image_url        = EXCLUDED.image_url,
-       updated_at       = NOW()
+       post_version_id    = EXCLUDED.post_version_id,
+       current_stage      = 'manager_review',
+       manager_approved   = FALSE,
+       client_approved    = FALSE,
+       platform           = EXCLUDED.platform,
+       caption_text       = EXCLUDED.caption_text,
+       image_url          = EXCLUDED.image_url,
+       -- skip_client_review is intentionally NOT overwritten on regeneration cycles;
+       -- it is set once on first INSERT and preserved for the lifetime of the post.
+       skip_client_review = COALESCE(approval_state.skip_client_review, EXCLUDED.skip_client_review),
+       client_feedback    = NULL,
+       updated_at         = NOW()
      RETURNING *`,
-    [post_id, project_id, manager_id, post_version_id, platform || null, caption_text || null, image_url || null]
+    [post_id, project_id, manager_id, post_version_id, platform || null, caption_text || null, image_url || null, skip_client_review || false]
   );
   return rows[0];
 }
@@ -62,6 +66,17 @@ async function setRejected(post_id, manager_id) {
   return rows[0];
 }
 
+async function setManagerRevision(post_id, manager_id, client_feedback) {
+  const { rows } = await pool.query(
+    `UPDATE approval_state
+     SET current_stage = 'manager_revision', client_feedback = $3, updated_at = NOW()
+     WHERE post_id = $1 AND manager_id = $2
+     RETURNING *`,
+    [post_id, manager_id, client_feedback || null]
+  );
+  return rows[0];
+}
+
 async function insertReview({ post_id, post_version_id, manager_id, reviewer_id, reviewer_role, decision, feedback_text }) {
   const { rows } = await pool.query(
     `INSERT INTO reviews (post_id, post_version_id, manager_id, reviewer_id, reviewer_role, decision, feedback_text)
@@ -98,6 +113,7 @@ module.exports = {
   setManagerApproved,
   setClientApproved,
   setRejected,
+  setManagerRevision,
   insertReview,
   getReviewsByPost,
   getReviewsByProject,

@@ -14,10 +14,19 @@ export default function PostDetail() {
   const [versions, setVersions] = useState([]);
   const [reviews, setReviews] = useState([]);
   const [approvalStage, setApprovalStage] = useState(null); // from review service — always in sync
+  const [approvalState, setApprovalState] = useState(null); // full approval state (for client_feedback)
   const [loading, setLoading] = useState(true);
   const [feedback, setFeedback] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
+
+  // Refine panel state (manager_revision stage)
+  const [refinedPrompt, setRefinedPrompt] = useState('');
+  const [refining, setRefining] = useState(false);
+  const [refineError, setRefineError] = useState('');
+
+  // Version restore state
+  const [restoringVersionId, setRestoringVersionId] = useState(null);
 
   // Schedule state
   const [schedule, setSchedule] = useState(null);
@@ -27,7 +36,6 @@ export default function PostDetail() {
   const [scheduleSuccess, setScheduleSuccess] = useState('');
   const [countdown, setCountdown] = useState('');
 
-  // Tracks the latest loadData call so stale in-flight responses are discarded.
   const loadIdRef = useRef(0);
 
   const loadData = useCallback(async () => {
@@ -40,14 +48,15 @@ export default function PostDetail() {
       apiClient.get(`/api/schedule/${id}`),
     ]);
 
-    // A newer loadData() call has already resolved — discard these stale results.
     if (callId !== loadIdRef.current) return;
 
     if (contentRes.status === 'fulfilled') {
       const rows = contentRes.value.data;
       if (Array.isArray(rows) && rows.length) {
-        setPost(rows[0]);       // newest version first (ORDER BY version_number DESC)
+        setPost(rows[0]);
         setVersions(rows);
+        // Pre-fill refined prompt with the latest image_prompt
+        setRefinedPrompt((prev) => prev || rows[0].image_prompt || '');
       }
     }
 
@@ -57,14 +66,15 @@ export default function PostDetail() {
     }
 
     if (stateRes.status === 'fulfilled') {
-      setApprovalStage(stateRes.value.data?.current_stage ?? null);
+      const stateData = stateRes.value.data;
+      setApprovalStage(stateData?.current_stage ?? null);
+      setApprovalState(stateData ?? null);
     }
 
     if (scheduleRes.status === 'fulfilled' && scheduleRes.value.data?.schedule) {
       const s = scheduleRes.value.data.schedule;
       setSchedule(s);
       if (s.scheduled_at) {
-        // Convert ISO to datetime-local value (YYYY-MM-DDTHH:mm) in local time
         const dt = new Date(s.scheduled_at);
         const local = new Date(dt.getTime() - dt.getTimezoneOffset() * 60000)
           .toISOString()
@@ -81,19 +91,15 @@ export default function PostDetail() {
     loadData().finally(() => setLoading(false));
   }, [loadData]);
 
-  // When content finishes regenerating the content service emits CONTENT_CREATED,
-  // which the realtime service broadcasts as POST_STATUS_UPDATED. Reload so the
-  // new caption/version appears without requiring a manual page refresh.
   useWebSocket(({ type, payload }) => {
     if (type === 'POST_STATUS_UPDATED' && String(payload.post_id) === id) {
       loadData();
     }
   });
 
-  // Live countdown to scheduled_at
+  // Live countdown
   useEffect(() => {
     if (!schedule?.scheduled_at) { setCountdown(''); return; }
-
     function tick() {
       const diff = new Date(schedule.scheduled_at) - Date.now();
       if (diff <= 0) { setCountdown('Publishing now…'); return; }
@@ -108,22 +114,15 @@ export default function PostDetail() {
       parts.push(`${s}s`);
       setCountdown(parts.join(' '));
     }
-
     tick();
     const timer = setInterval(tick, 1000);
     return () => clearInterval(timer);
   }, [schedule?.scheduled_at]);
 
   async function updateSchedule() {
-    if (!scheduleAt) {
-      setScheduleError('Please select a publish date and time.');
-      return;
-    }
+    if (!scheduleAt) { setScheduleError('Please select a publish date and time.'); return; }
     const selected = new Date(scheduleAt);
-    if (selected <= new Date()) {
-      setScheduleError('Scheduled time must be in the future.');
-      return;
-    }
+    if (selected <= new Date()) { setScheduleError('Scheduled time must be in the future.'); return; }
     setScheduleError('');
     setScheduleSuccess('');
     setScheduleSubmitting(true);
@@ -139,7 +138,7 @@ export default function PostDetail() {
   }
 
   const isClient = user?.role === 'client' || user?.role === 'viewer';
-  const isManager = !isClient; // manager or team_member
+  const isManager = !isClient;
 
   async function submitReview(decision) {
     if (decision !== 'approved' && !feedback.trim()) {
@@ -161,6 +160,33 @@ export default function PostDetail() {
       setSubmitError(err.response?.data?.error || 'Review submission failed.');
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleRefineSubmit(e) {
+    e.preventDefault();
+    if (!refinedPrompt.trim()) { setRefineError('Prompt is required.'); return; }
+    setRefineError('');
+    setRefining(true);
+    try {
+      await apiClient.post(`/api/content/${id}/refine`, { refined_prompt: refinedPrompt.trim() });
+      await loadData();
+    } catch (err) {
+      setRefineError(err.response?.data?.error || 'Failed to send to AI. Please try again.');
+    } finally {
+      setRefining(false);
+    }
+  }
+
+  async function handleRestoreVersion(versionId) {
+    setRestoringVersionId(versionId);
+    try {
+      await apiClient.put(`/api/content/${id}/versions/${versionId}/restore`);
+      await loadData();
+    } catch (err) {
+      console.error('Restore failed:', err.message);
+    } finally {
+      setRestoringVersionId(null);
     }
   }
 
@@ -188,18 +214,24 @@ export default function PostDetail() {
     );
   }
 
-  // approvalStage (review-service) is authoritative during the review loop.
-  // post.status (content-service) is authoritative for terminal states — the review-service
-  // state machine stops at 'approved' and never advances to 'scheduled' or 'published'.
   const terminalStatus = post.status === 'scheduled' || post.status === 'published';
   const currentStage   = terminalStatus ? post.status : (approvalStage ?? post.status);
-  const isManagerReview = currentStage === 'manager_review';
-  const isClientReview = currentStage === 'client_review';
-  const isRegenerating = currentStage === 'rejected';
+  const isManagerReview    = currentStage === 'manager_review';
+  const isClientReview     = currentStage === 'client_review';
+  const isManagerRevision  = currentStage === 'manager_revision';
+  const isRegenerating     = currentStage === 'rejected';
   const canReview = (isManager && isManagerReview) || (isClient && isClientReview);
-  const isApproved = currentStage === 'approved';
+  const isApproved  = currentStage === 'approved';
   const isScheduled = currentStage === 'scheduled';
   const isPublished = currentStage === 'published';
+
+  // The active version to highlight in version history
+  const activeVersionId = post.active_version_id;
+
+  // Client feedback that triggered manager_revision (from approval state or last review)
+  const clientFeedback = approvalState?.client_feedback
+    || reviews.filter((r) => r.reviewer_role === 'client' && r.decision === 'changes_requested').slice(-1)[0]?.feedback_text
+    || '';
 
   return (
     <div className="page">
@@ -234,19 +266,14 @@ export default function PostDetail() {
                 src={post.image_url}
                 alt="Generated post visual"
                 style={{
-                  width: '100%',
-                  maxHeight: 300,
-                  objectFit: 'contain',
-                  borderRadius: 8,
-                  border: '1px solid var(--border)',
-                  background: 'var(--surface)',
-                  display: 'block',
+                  width: '100%', maxHeight: 300, objectFit: 'contain',
+                  borderRadius: 8, border: '1px solid var(--border)',
+                  background: 'var(--surface)', display: 'block',
                 }}
                 onError={(e) => { e.target.style.display = 'none'; }}
               />
             </div>
           )}
-
           <div style={{ flex: '1 1 200px' }}>
             {post.caption_text ? (
               <p style={{ fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-wrap', color: 'var(--text-primary)', margin: 0 }}>
@@ -269,7 +296,54 @@ export default function PostDetail() {
         </div>
       )}
 
-      {/* All versions (only shown when more than one) */}
+      {/* Manager revision panel — shown when client sent feedback back to manager */}
+      {isManager && isManagerRevision && (
+        <div className="review-panel">
+          <div className="review-panel-title">Refine & Regenerate</div>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 0, marginBottom: 16, lineHeight: 1.6 }}>
+            The client has requested changes. Review their feedback below, refine the AI prompt, then send it to regenerate.
+          </p>
+
+          {clientFeedback && (
+            <div style={{
+              padding: '12px 14px', marginBottom: 16,
+              background: 'rgba(255,107,107,0.06)', border: '1px solid rgba(255,107,107,0.2)',
+              borderRadius: 'var(--radius-sm)',
+            }}>
+              <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: '#ff6b6b', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Client Feedback
+              </div>
+              <p style={{ margin: 0, fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.6 }}>
+                "{clientFeedback}"
+              </p>
+            </div>
+          )}
+
+          <form onSubmit={handleRefineSubmit}>
+            <div className="field">
+              <label className="field-label">Refined Prompt</label>
+              <textarea
+                className="field-textarea"
+                placeholder="Edit the AI prompt based on the client's feedback…"
+                value={refinedPrompt}
+                onChange={(e) => setRefinedPrompt(e.target.value)}
+                rows={6}
+                required
+              />
+            </div>
+            {refineError && (
+              <div className="form-error" style={{ marginBottom: 12 }}>{refineError}</div>
+            )}
+            <div className="review-actions">
+              <button type="submit" className="btn btn-primary" disabled={refining}>
+                {refining ? <><span className="spinner" />Sending to AI…</> : '✦ Send to AI'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Version History */}
       {versions.length > 1 && (
         <div className="section">
           <div className="section-header">
@@ -279,17 +353,46 @@ export default function PostDetail() {
             </span>
           </div>
           <div className="stagger-list">
-            {versions.map((v) => (
-              <div key={v.version_id} className="version-card">
-                <div className="version-label">Version {v.version_number}</div>
-                {v.revision_notes && (
-                  <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>
-                    Notes: {v.revision_notes}
-                  </p>
-                )}
-                <p className="version-content">{v.caption_text}</p>
-              </div>
-            ))}
+            {versions.map((v) => {
+              const isActive = v.version_id === activeVersionId;
+              return (
+                <div
+                  key={v.version_id}
+                  className="version-card"
+                  style={isActive ? { border: '1px solid var(--accent)', background: 'rgba(200,255,0,0.04)' } : {}}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    <span className="version-label">Version {v.version_number}</span>
+                    {isActive && (
+                      <span style={{
+                        fontSize: 10, fontFamily: 'var(--font-mono)', padding: '2px 8px',
+                        borderRadius: 20, background: 'rgba(200,255,0,0.15)', color: 'var(--accent)',
+                      }}>
+                        active
+                      </span>
+                    )}
+                    {isManager && !isActive && (
+                      <button
+                        className="btn btn-secondary btn-sm"
+                        style={{ marginLeft: 'auto', fontSize: 11, padding: '2px 10px' }}
+                        onClick={() => handleRestoreVersion(v.version_id)}
+                        disabled={restoringVersionId === v.version_id}
+                      >
+                        {restoringVersionId === v.version_id
+                          ? <span className="spinner" style={{ width: 10, height: 10 }} />
+                          : 'Restore'}
+                      </button>
+                    )}
+                  </div>
+                  {v.revision_notes && (
+                    <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>
+                      Notes: {v.revision_notes}
+                    </p>
+                  )}
+                  <p className="version-content">{v.caption_text}</p>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -319,7 +422,7 @@ export default function PostDetail() {
         )}
       </div>
 
-      {/* Scheduled info bar — read-only, shown to everyone once scheduled/published */}
+      {/* Scheduled info bar */}
       {(isScheduled || isPublished) && schedule && (
         <div className={`schedule-info-bar ${isPublished ? 'schedule-info-bar--published' : ''}`}>
           <span className="schedule-info-icon">{isPublished ? '✓' : '◷'}</span>
@@ -340,7 +443,7 @@ export default function PostDetail() {
         </div>
       )}
 
-      {/* Schedule panel — manager only, shown when post is approved or scheduled (not yet fired) */}
+      {/* Schedule panel */}
       {isManager && (isApproved || isScheduled) && (
         <div className="schedule-panel" id="schedule-panel">
           <div className="schedule-panel-title">
@@ -373,18 +476,10 @@ export default function PostDetail() {
               </div>
             )}
           </div>
-          {scheduleError && (
-            <div className="form-error" style={{ marginTop: 10 }}>{scheduleError}</div>
-          )}
-          {scheduleSuccess && (
-            <div className="schedule-success">{scheduleSuccess}</div>
-          )}
+          {scheduleError && <div className="form-error" style={{ marginTop: 10 }}>{scheduleError}</div>}
+          {scheduleSuccess && <div className="schedule-success">{scheduleSuccess}</div>}
           <div style={{ marginTop: 14 }}>
-            <button
-              className="btn btn-primary"
-              onClick={updateSchedule}
-              disabled={scheduleSubmitting}
-            >
+            <button className="btn btn-primary" onClick={updateSchedule} disabled={scheduleSubmitting}>
               {scheduleSubmitting ? <span className="spinner" /> : null}
               {isScheduled ? 'Update Schedule' : 'Confirm Schedule'}
             </button>
@@ -392,7 +487,7 @@ export default function PostDetail() {
         </div>
       )}
 
-      {/* Review panel — shown to manager at manager_review, or client at client_review */}
+      {/* Review panel */}
       {canReview && (
         <div className="review-panel">
           <div className="review-panel-title">
@@ -402,7 +497,9 @@ export default function PostDetail() {
             <label className="field-label">Feedback</label>
             <textarea
               className="field-textarea"
-              placeholder="Describe what needs to change so the AI can regenerate with your feedback…"
+              placeholder={isClientReview
+                ? 'Describe what needs to change. Your feedback will go to the manager who will refine the prompt before regenerating.'
+                : 'Describe what needs to change so the AI can regenerate with your feedback…'}
               value={feedback}
               onChange={(e) => setFeedback(e.target.value)}
               rows={4}
@@ -412,19 +509,11 @@ export default function PostDetail() {
             <div className="form-error" style={{ marginBottom: 12 }}>{submitError}</div>
           )}
           <div className="review-actions">
-            <button
-              className="btn btn-primary"
-              onClick={() => submitReview('approved')}
-              disabled={submitting}
-            >
+            <button className="btn btn-primary" onClick={() => submitReview('approved')} disabled={submitting}>
               {submitting ? <span className="spinner" /> : null}
               ✓ Approve
             </button>
-            <button
-              className="btn btn-danger"
-              onClick={() => submitReview('changes_requested')}
-              disabled={submitting}
-            >
+            <button className="btn btn-danger" onClick={() => submitReview('changes_requested')} disabled={submitting}>
               ↺ Request Changes
             </button>
           </div>

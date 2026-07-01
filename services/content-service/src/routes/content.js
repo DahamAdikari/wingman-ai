@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { createNewPost } = require('../services/contentService');
+const { createNewPost, refineAndRegenerate, restoreVersion } = require('../services/contentService');
 const { getPostById, getPostsByProject } = require('../db/queries');
 
 const VALID_PLATFORMS = ['instagram', 'linkedin', 'twitter', 'telegram'];
@@ -14,7 +14,7 @@ router.post('/', async (req, res) => {
   const manager_id = getManagerId(req);
   if (!manager_id) return res.status(401).json({ error: 'manager_id required' });
 
-  const { project_id, platform, prompt, image_prompt } = req.body;
+  const { project_id, platform, prompt, image_prompt, skip_client_review } = req.body;
   if (!project_id || !platform || !prompt) {
     return res.status(400).json({ error: 'project_id, platform, and prompt are required' });
   }
@@ -23,7 +23,7 @@ router.post('/', async (req, res) => {
   }
 
   try {
-    const result = await createNewPost({ manager_id, project_id, platform, prompt, image_prompt });
+    const result = await createNewPost({ manager_id, project_id, platform, prompt, image_prompt, skip_client_review: skip_client_review === true });
     res.status(201).json(result);
   } catch (err) {
     console.error('createNewPost error:', err.message);
@@ -57,6 +57,37 @@ router.get('/:id', async (req, res) => {
   } catch (err) {
     console.error('getPostById error:', err.message);
     res.status(500).json({ error: 'Failed to retrieve post' });
+  }
+});
+
+// POST /content/:id/refine — manager submits refined prompt after client feedback
+router.post('/:id/refine', async (req, res) => {
+  const manager_id = getManagerId(req);
+  if (!manager_id) return res.status(401).json({ error: 'manager_id required' });
+
+  const { refined_prompt } = req.body;
+  if (!refined_prompt) return res.status(400).json({ error: 'refined_prompt is required' });
+
+  try {
+    const version = await refineAndRegenerate({ post_id: req.params.id, manager_id, refined_prompt });
+    res.status(201).json(version);
+  } catch (err) {
+    console.error('refineAndRegenerate error:', err.message);
+    res.status(500).json({ error: 'Refinement failed' });
+  }
+});
+
+// PUT /content/:id/versions/:versionId/restore — roll back to a previous version
+router.put('/:id/versions/:versionId/restore', async (req, res) => {
+  const manager_id = getManagerId(req);
+  if (!manager_id) return res.status(401).json({ error: 'manager_id required' });
+
+  try {
+    const version = await restoreVersion({ post_id: req.params.id, version_id: req.params.versionId, manager_id });
+    res.json(version);
+  } catch (err) {
+    console.error('restoreVersion error:', err.message);
+    res.status(err.message.includes('not found') ? 404 : 500).json({ error: err.message });
   }
 });
 

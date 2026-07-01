@@ -3,13 +3,15 @@ const pool = require('./pool');
 async function initializeTables() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS posts (
-      id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-      project_id  UUID        NOT NULL,
-      manager_id  UUID        NOT NULL,
-      platform    VARCHAR(100) NOT NULL,
-      status      VARCHAR(50) DEFAULT 'draft',
-      created_at  TIMESTAMP   DEFAULT NOW(),
-      updated_at  TIMESTAMP   DEFAULT NOW()
+      id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      project_id        UUID        NOT NULL,
+      manager_id        UUID        NOT NULL,
+      platform          VARCHAR(100) NOT NULL,
+      status            VARCHAR(50) DEFAULT 'draft',
+      -- status values: 'draft' | 'manager_review' | 'client_review' | 'manager_revision' | 'approved' | 'scheduled' | 'published' | 'rejected'
+      active_version_id UUID,
+      created_at        TIMESTAMP   DEFAULT NOW(),
+      updated_at        TIMESTAMP   DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS post_versions (
@@ -49,6 +51,9 @@ async function initializeTables() {
       file_url    TEXT,
       cached_at   TIMESTAMP    DEFAULT NOW()
     );
+  `);
+  await pool.query(`
+    ALTER TABLE posts ADD COLUMN IF NOT EXISTS active_version_id UUID;
   `);
   console.log('Content DB tables ready');
 }

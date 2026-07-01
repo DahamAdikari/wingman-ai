@@ -65,6 +65,7 @@ async function initDB() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);
     ALTER TABLE users ADD COLUMN IF NOT EXISTS invite_token VARCHAR(255);
     ALTER TABLE users ADD COLUMN IF NOT EXISTS invite_token_expires_at TIMESTAMP;
+    ALTER TABLE projects ADD COLUMN IF NOT EXISTS skip_client_review BOOLEAN DEFAULT FALSE;
   `);
 
   console.log('[user-service] Database tables initialized');

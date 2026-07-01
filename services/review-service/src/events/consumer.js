@@ -30,6 +30,7 @@ async function startConsumer({ onContentCreated }) {
           platform: payload.platform,
           caption_text: payload.caption_text,
           image_url: payload.image_url,
+          skip_client_review: payload.skip_client_review || false,
         });
       }
       channel.ack(msg);

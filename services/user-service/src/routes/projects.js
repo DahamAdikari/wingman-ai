@@ -38,6 +38,19 @@ router.patch('/:id', async (req, res) => {
   }
 });
 
+router.patch('/:id/config', async (req, res) => {
+  try {
+    const project = await projectService.updateProjectConfig({
+      id: req.params.id,
+      manager_id: getManagerId(req),
+      ...req.body,
+    });
+    res.json(project);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 router.post('/:id/members', async (req, res) => {
   try {
     const member = await projectService.addProjectMember({
