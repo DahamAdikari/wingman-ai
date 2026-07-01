@@ -72,6 +72,8 @@ export default function PostDetail() {
   const [refinedPrompt, setRefinedPrompt] = useState('');
   const [refining, setRefining] = useState(false);
   const [refineError, setRefineError] = useState('');
+  const [sendingActiveVersion, setSendingActiveVersion] = useState(false);
+  const [sendActiveVersionError, setSendActiveVersionError] = useState('');
 
   // Version restore state
   const [restoringVersionId, setRestoringVersionId] = useState(null);
@@ -103,8 +105,8 @@ export default function PostDetail() {
       if (Array.isArray(rows) && rows.length) {
         setPost(rows[0]);
         setVersions(rows);
-        // Pre-fill refined prompt with the latest image_prompt
-        setRefinedPrompt((prev) => prev || rows[0].image_prompt || '');
+        const activeRow = rows.find((row) => row.version_id === rows[0].active_version_id) || rows[0];
+        setRefinedPrompt(activeRow.image_prompt || '');
       }
     }
 
@@ -217,7 +219,10 @@ export default function PostDetail() {
     setRefineError('');
     setRefining(true);
     try {
-      await apiClient.post(`/api/content/${id}/refine`, { refined_prompt: refinedPrompt.trim() });
+      await apiClient.post(`/api/content/${id}/refine`, {
+        refined_prompt: refinedPrompt.trim(),
+        base_version_id: activeVersion?.version_id || null,
+      });
       await loadData();
     } catch (err) {
       setRefineError(err.response?.data?.error || 'Failed to send to AI. Please try again.');
@@ -226,8 +231,34 @@ export default function PostDetail() {
     }
   }
 
+  async function handleSendActiveVersionToClient() {
+    if (!activeVersion?.version_id) {
+      setSendActiveVersionError('Select a version before sending it to the client.');
+      return;
+    }
+
+    setSendActiveVersionError('');
+    setSendingActiveVersion(true);
+    try {
+      await apiClient.post(`/api/review/${id}/select-version`, {
+        reviewer_id: user.user_id || user.manager_id,
+        version_id: activeVersion.version_id,
+        platform: post.platform,
+        caption_text: activeVersion.caption_text || null,
+        image_url: activeVersion.image_url || null,
+      });
+      await loadData();
+    } catch (err) {
+      setSendActiveVersionError(err.response?.data?.error || 'Failed to send selected version to the client.');
+    } finally {
+      setSendingActiveVersion(false);
+    }
+  }
+
   async function handleRestoreVersion(versionId) {
     setRestoringVersionId(versionId);
+    setRefineError('');
+    setSendActiveVersionError('');
     try {
       await apiClient.put(`/api/content/${id}/versions/${versionId}/restore`);
       await loadData();
@@ -365,9 +396,9 @@ export default function PostDetail() {
       {/* Manager revision panel — shown when client sent feedback back to manager */}
       {isManager && isManagerRevision && (
         <div className="review-panel">
-          <div className="review-panel-title">Refine & Regenerate</div>
+          <div className="review-panel-title">Choose Next Step</div>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 0, marginBottom: 16, lineHeight: 1.6 }}>
-            The client has requested changes. Review their feedback below, refine the AI prompt, then send it to regenerate.
+            The client has requested changes. You can regenerate from the active version, make another version active from version history, or send the active version back for client review.
           </p>
 
           {clientFeedback && (
@@ -387,10 +418,10 @@ export default function PostDetail() {
 
           <form onSubmit={handleRefineSubmit}>
             <div className="field">
-              <label className="field-label">Refined Prompt</label>
+              <label className="field-label">Prompt for active version</label>
               <textarea
                 className="field-textarea"
-                placeholder="Edit the AI prompt based on the client's feedback…"
+                placeholder="Edit the prompt for the active version before sending it to AI…"
                 value={refinedPrompt}
                 onChange={(e) => setRefinedPrompt(e.target.value)}
                 rows={6}
@@ -402,9 +433,20 @@ export default function PostDetail() {
             )}
             <div className="review-actions">
               <button type="submit" className="btn btn-primary" disabled={refining}>
-                {refining ? <><span className="spinner" />Sending to AI…</> : '✦ Send to AI'}
+                {refining ? <><span className="spinner" />Sending to AI…</> : '✦ Send active version prompt to AI'}
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={handleSendActiveVersionToClient}
+                disabled={sendingActiveVersion || refining}
+              >
+                {sendingActiveVersion ? <><span className="spinner" />Sending…</> : 'Send active version to client'}
               </button>
             </div>
+            {sendActiveVersionError && (
+              <div className="form-error" style={{ marginTop: 12 }}>{sendActiveVersionError}</div>
+            )}
           </form>
         </div>
       )}
@@ -446,7 +488,7 @@ export default function PostDetail() {
                       >
                         {restoringVersionId === v.version_id
                           ? <span className="spinner" style={{ width: 10, height: 10 }} />
-                          : 'Restore'}
+                          : 'Make active'}
                       </button>
                     )}
                   </div>

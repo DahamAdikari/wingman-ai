@@ -77,6 +77,25 @@ async function setManagerRevision(post_id, manager_id, client_feedback) {
   return rows[0];
 }
 
+async function setVersionForClientReview({ post_id, manager_id, post_version_id, platform, caption_text, image_url }) {
+  const { rows } = await pool.query(
+    `UPDATE approval_state
+     SET post_version_id = $3,
+         current_stage = 'client_review',
+         manager_approved = TRUE,
+         client_approved = FALSE,
+         platform = COALESCE($4, platform),
+         caption_text = $5,
+         image_url = $6,
+         client_feedback = NULL,
+         updated_at = NOW()
+     WHERE post_id = $1 AND manager_id = $2
+     RETURNING *`,
+    [post_id, manager_id, post_version_id, platform || null, caption_text || null, image_url || null]
+  );
+  return rows[0];
+}
+
 async function insertReview({ post_id, post_version_id, manager_id, reviewer_id, reviewer_role, decision, feedback_text }) {
   const { rows } = await pool.query(
     `INSERT INTO reviews (post_id, post_version_id, manager_id, reviewer_id, reviewer_role, decision, feedback_text)
@@ -114,6 +133,7 @@ module.exports = {
   setClientApproved,
   setRejected,
   setManagerRevision,
+  setVersionForClientReview,
   insertReview,
   getReviewsByPost,
   getReviewsByProject,

@@ -1,5 +1,5 @@
 const express = require('express');
-const { submitReview, getReviewHistory, getApprovalState, getProjectReviews } = require('../services/reviewService');
+const { submitReview, getReviewHistory, getApprovalState, selectVersionForClientReview, getProjectReviews } = require('../services/reviewService');
 
 const router = express.Router();
 
@@ -28,6 +28,33 @@ router.get('/:postId/state', async (req, res) => {
   try {
     const state = await getApprovalState(postId, manager_id);
     res.json(state);
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+// POST /review/:postId/select-version — manager sends an existing version to client review
+router.post('/:postId/select-version', async (req, res) => {
+  const { postId } = req.params;
+  const manager_id = req.headers['x-manager-id'];
+  const { reviewer_id, version_id, platform, caption_text, image_url } = req.body;
+
+  if (!manager_id) return res.status(401).json({ error: 'Missing manager_id' });
+  if (!reviewer_id || !version_id) {
+    return res.status(400).json({ error: 'reviewer_id and version_id are required' });
+  }
+
+  try {
+    const state = await selectVersionForClientReview({
+      post_id: postId,
+      manager_id,
+      reviewer_id,
+      version_id,
+      platform,
+      caption_text,
+      image_url,
+    });
+    res.status(200).json(state);
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
   }

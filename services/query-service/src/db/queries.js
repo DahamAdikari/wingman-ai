@@ -75,7 +75,8 @@ async function onClientFeedback({ project_id, manager_id, feedback_text }) {
     project_id,
     manager_id,
     `last_feedback_snippet = $3,
-     last_post_status = 'client_review'`,
+     posts_in_review = GREATEST(posts_in_review - 1, 0),
+     last_post_status = 'manager_revision'`,
     [feedback_text]
   );
 }

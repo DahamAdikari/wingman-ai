@@ -86,14 +86,38 @@ async function regenerateContent({ post_id, manager_id, revision_notes }) {
   return version;
 }
 
-// Called from POST /content/:postId/refine — manager refines prompt after client feedback
-async function refineAndRegenerate({ post_id, manager_id, refined_prompt }) {
+// Called from POST /content/:postId/refine — manager refines prompt after client feedback.
+// If base_version_id is provided, the AI gets the selected version as context instead
+// of always using the newest generated version.
+async function refineAndRegenerate({ post_id, manager_id, refined_prompt, base_version_id }) {
   const rows = await getPostById(post_id, manager_id);
   if (!rows.length) throw new Error(`Post ${post_id} not found`);
 
   const latestVersion = rows[0];
-  const caption_text = await generateCaption(refined_prompt);
-  const image_url = await generateImage(refined_prompt);
+  let baseVersion = latestVersion;
+  if (base_version_id) {
+    const selectedVersion = await getVersionById(base_version_id, manager_id);
+    if (!selectedVersion) throw new Error(`Version ${base_version_id} not found`);
+    if (selectedVersion.post_id !== post_id) throw new Error('Version does not belong to this post');
+    baseVersion = {
+      ...selectedVersion,
+      version_id: selectedVersion.id,
+      version_number: selectedVersion.version_number,
+      project_id: selectedVersion.project_id,
+      platform: selectedVersion.platform,
+    };
+  }
+
+  const captionPrompt = baseVersion.caption_text
+    ? `Revise this post using the selected version as context.\n\nSelected version caption:\n${baseVersion.caption_text}\n\nManager prompt:\n${refined_prompt}`
+    : refined_prompt;
+
+  const imagePrompt = baseVersion.image_prompt
+    ? `${refined_prompt}\n\nKeep visual continuity with this selected version prompt:\n${baseVersion.image_prompt}`
+    : refined_prompt;
+
+  const caption_text = await generateCaption(captionPrompt);
+  const image_url = await generateImage(imagePrompt);
   const next_version = (await getLatestVersionNumber(post_id)) + 1;
 
   const version = await createPostVersion({
@@ -102,8 +126,8 @@ async function refineAndRegenerate({ post_id, manager_id, refined_prompt }) {
     version_number: next_version,
     caption_text,
     image_url,
-    image_prompt: refined_prompt,
-    revision_notes: `Manager refinement (v${next_version})`,
+    image_prompt: imagePrompt,
+    revision_notes: `Manager refinement from v${baseVersion.version_number || 'selected'} (v${next_version})`,
   });
 
   await setActiveVersion(post_id, manager_id, version.id);

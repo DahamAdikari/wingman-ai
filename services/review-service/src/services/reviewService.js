@@ -134,8 +134,61 @@ async function getApprovalState(post_id, manager_id) {
   return state;
 }
 
+async function selectVersionForClientReview({ post_id, manager_id, reviewer_id, version_id, platform, caption_text, image_url }) {
+  const state = await queries.getApprovalState(post_id, manager_id);
+  if (!state) {
+    const err = new Error(`No approval state found for post ${post_id}`);
+    err.status = 404;
+    throw err;
+  }
+
+  if (!['manager_review', 'manager_revision'].includes(state.current_stage)) {
+    const err = new Error(`Cannot send selected version — post is at stage '${state.current_stage}'`);
+    err.status = 400;
+    throw err;
+  }
+
+  const updated = await queries.setVersionForClientReview({
+    post_id,
+    manager_id,
+    post_version_id: version_id,
+    platform,
+    caption_text,
+    image_url,
+  });
+
+  await queries.insertReview({
+    post_id,
+    post_version_id: version_id,
+    manager_id,
+    reviewer_id,
+    reviewer_role: 'manager',
+    decision: 'approved',
+    feedback_text: 'Selected existing version for client review',
+  });
+
+  const payload = {
+    post_id,
+    post_version_id: version_id,
+    project_id: updated.project_id,
+    manager_id,
+    platform: updated.platform,
+    caption_text: updated.caption_text,
+    image_url: updated.image_url,
+  };
+
+  if (updated.skip_client_review) {
+    await queries.setClientApproved(post_id, manager_id);
+    await publish('CONTENT_APPROVED', { ...payload, new_status: 'approved' });
+  } else {
+    await publish('MANAGER_APPROVED', { ...payload, new_status: 'client_review' });
+  }
+
+  return updated;
+}
+
 async function getProjectReviews(project_id, manager_id) {
   return queries.getReviewsByProject(project_id, manager_id);
 }
 
-module.exports = { initApprovalState, submitReview, getReviewHistory, getApprovalState, getProjectReviews };
+module.exports = { initApprovalState, submitReview, getReviewHistory, getApprovalState, selectVersionForClientReview, getProjectReviews };

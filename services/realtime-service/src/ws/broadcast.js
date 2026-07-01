@@ -31,7 +31,7 @@ const EVENT_TYPE_MAP = {
 const STATUS_MAP = {
   CONTENT_CREATED:  'manager_review',
   MANAGER_APPROVED: 'client_review',
-  CLIENT_FEEDBACK:  'rejected',
+  CLIENT_FEEDBACK:  'manager_revision',
   CONTENT_APPROVED: 'approved',
   CONTENT_REJECTED: 'rejected',
   READY_TO_PUBLISH:   'scheduled',

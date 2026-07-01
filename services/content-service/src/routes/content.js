@@ -65,11 +65,11 @@ router.post('/:id/refine', async (req, res) => {
   const manager_id = getManagerId(req);
   if (!manager_id) return res.status(401).json({ error: 'manager_id required' });
 
-  const { refined_prompt } = req.body;
+  const { refined_prompt, base_version_id } = req.body;
   if (!refined_prompt) return res.status(400).json({ error: 'refined_prompt is required' });
 
   try {
-    const version = await refineAndRegenerate({ post_id: req.params.id, manager_id, refined_prompt });
+    const version = await refineAndRegenerate({ post_id: req.params.id, manager_id, refined_prompt, base_version_id });
     res.status(201).json(version);
   } catch (err) {
     console.error('refineAndRegenerate error:', err.message);
