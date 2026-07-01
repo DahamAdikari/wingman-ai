@@ -25,7 +25,7 @@ export default function Register() {
     setLoading(true);
     try {
       const { data } = await apiClient.post('/api/auth/register', { name, email, password });
-      login(data.token);
+      login(data.token, data.manager);
       navigate('/dashboard');
     } catch (err) {
       setError(err.response?.data?.error || 'Registration failed');

@@ -9,10 +9,10 @@ export const useAuthStore = create(
       token: null,
       user: null,
 
-      login(token) {
-        let user = null;
+      login(token, profile = null) {
+        let user = profile;
         try {
-          user = jwtDecode(token);
+          user = { ...jwtDecode(token), ...profile };
         } catch {
           // invalid token
         }

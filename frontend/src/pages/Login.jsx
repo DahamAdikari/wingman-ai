@@ -24,7 +24,7 @@ export default function Login() {
     setLoading(true);
     try {
       const { data } = await apiClient.post('/api/auth/login', { email, password });
-      login(data.token);
+      login(data.token, data.user || data.manager);
       // Route based on role decoded from token
       const decoded = JSON.parse(atob(data.token.split('.')[1]));
       const role = decoded.role;

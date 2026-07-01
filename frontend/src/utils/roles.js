@@ -5,6 +5,17 @@ export const ROLES = {
   VIEWER: 'viewer',
 };
 
+export const ROLE_LABELS = {
+  [ROLES.MANAGER]: 'Manager',
+  [ROLES.TEAM_MEMBER]: 'Team Member',
+  [ROLES.CLIENT]: 'Client',
+  [ROLES.VIEWER]: 'Viewer',
+};
+
+export function formatRole(role) {
+  return ROLE_LABELS[role] ?? role ?? 'User';
+}
+
 export function isManager(user) {
   return user?.role === ROLES.MANAGER;
 }
